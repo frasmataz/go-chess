@@ -191,6 +191,77 @@ func TestPositionToIndex(t *testing.T) {
 	}
 }
 
+func TestIndexToPosition(t *testing.T) {
+	type indexTest struct {
+		input     [2]int
+		want      string
+		wantError bool
+	}
+
+	tests := []indexTest{
+		{
+			input: [2]int{7, 0},
+			want:  "a1",
+		},
+		{
+			input: [2]int{0, 7},
+			want:  "h8",
+		},
+		{
+			input: [2]int{0, 0},
+			want:  "a8",
+		},
+		{
+			input: [2]int{7, 7},
+			want:  "h1",
+		},
+		{
+			input: [2]int{2, 5},
+			want:  "f6",
+		},
+		{
+			input: [2]int{6, 3},
+			want:  "d2",
+		},
+		{
+			input:     [2]int{-1, 5},
+			wantError: true,
+		},
+		{
+			input:     [2]int{8, 5},
+			wantError: true,
+		},
+		{
+			input:     [2]int{2, -1},
+			wantError: true,
+		},
+		{
+			input:     [2]int{2, 8},
+			wantError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test.input), func(t *testing.T) {
+			output, err := indexToPosition(test.input)
+			if err != nil {
+				if !test.wantError {
+					t.Errorf("PositionToIndex threw unexpected error: %v", err)
+				}
+				return
+			}
+
+			if test.wantError {
+				t.Errorf("PositionToIndex did not throw error as expected - input: '%v', got '%v'", test.input, output)
+			}
+
+			if !reflect.DeepEqual(test.want, output) {
+				t.Errorf("PositionToIndex returned unexpected output - input '%v', want '%v', got '%v'", test.input, test.want, output)
+			}
+		})
+	}
+}
+
 func TestPrintGameState(t *testing.T) {
 	board, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 	if err != nil {

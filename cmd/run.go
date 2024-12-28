@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/gofiber/fiber/v2/log"
+
 	game "github.com/frasmataz/go-chess/internal"
 )
 
@@ -18,7 +20,7 @@ func main() {
 
 		err := game.ExecuteMove(input)
 		if err != nil {
-			panic(err)
+			log.Error(err)
 		}
 	}
 }

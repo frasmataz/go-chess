@@ -3,11 +3,13 @@ package game
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/fatih/color"
+	"github.com/gofiber/fiber/v2/log"
 )
 
 type Status int
@@ -65,12 +67,54 @@ func positionToIndex(position string) ([2]int, error) {
 	return [2]int{rowIndex, colIndex}, nil
 }
 
-func IndexToPosition(index [2]int) (string, error) {
+func indexToPosition(index [2]int) (string, error) {
 	if index[0] < 0 || index[0] > 7 || index[1] < 0 || index[1] > 7 {
 		return "", fmt.Errorf("input indeces must both be between 0 - 7 inclusive - got '%v'", index)
 	}
 
-	return fmt.Sprintf("%c%c", rune(index[1]+97), rune(8-index[0])), nil
+	return fmt.Sprintf("%c%s", rune(index[1]+97), strconv.Itoa(8-index[0])), nil
+}
+
+func positionRelative(position string, offsetX int, offsetY int) (string, error) {
+	startingIndex, err := positionToIndex(position)
+	if err != nil {
+		return "", err
+	}
+
+	output, err := indexToPosition([2]int{startingIndex[0] + offsetY, startingIndex[1] + offsetX})
+	if err != nil {
+		return "", err
+	}
+
+	return output, nil
+}
+
+func (game *gameState) getPiece(position string) (Piece, error) {
+	index, err := positionToIndex(position)
+	if err != nil {
+		return Piece{}, err
+	}
+
+	return game.boardState[index[0]][index[1]], nil
+}
+
+func (game *gameState) setPiece(piece Piece, position string) error {
+	index, err := positionToIndex(position)
+	if err != nil {
+		return err
+	}
+
+	game.boardState[index[0]][index[1]] = piece
+	return nil
+}
+
+func NewGame() *gameState {
+	game, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	if err != nil {
+		panic(err)
+	}
+
+	return game
 }
 
 func BoardFromFEN(fen string) (*gameState, error) {
@@ -184,15 +228,6 @@ func BoardFromFEN(fen string) (*gameState, error) {
 	return &board, nil
 }
 
-func NewGame() *gameState {
-	game, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-	if err != nil {
-		panic(err)
-	}
-
-	return game
-}
-
 func (b *gameState) PrintGameState() string {
 	blackSquare := color.BgRGB(0, 0, 0)
 	whiteSquare := color.BgRGB(60, 50, 80)
@@ -240,23 +275,87 @@ func (b *gameState) PrintGameState() string {
 	return output
 }
 
-func (game *gameState) getPiece(position string) (Piece, error) {
-	index, err := positionToIndex(position)
+func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) {
+	piece, err := game.getPiece(position)
 	if err != nil {
-		return Piece{}, err
+		return nil, err
 	}
 
-	return game.boardState[index[0]][index[1]], nil
-}
+	output := []string{}
 
-func (game *gameState) setPiece(piece Piece, position string) error {
-	index, err := positionToIndex(position)
-	if err != nil {
-		return err
+	var opponentColour PlayerColour
+	if piece.Colour == White {
+		opponentColour = Black
+	} else if piece.Colour == Black {
+		opponentColour = White
 	}
 
-	game.boardState[index[0]][index[1]] = piece
-	return nil
+	if piece.Class == Pawn {
+		// Check one step forward
+		yOffset := 1
+		if piece.Colour == White {
+			yOffset = -1
+		}
+		target, err := positionRelative(position, 0, yOffset)
+		if err != nil {
+			log.Warn(err)
+		}
+		if p, err := game.getPiece(target); err == nil && p.Class == Space {
+			output = append(output, target)
+
+			// Check two steps forward if still on starting row
+			currentIndex, err := positionToIndex(position)
+			if err != nil {
+				return nil, fmt.Errorf("piece in unexpected position - pos: %v, err: %v", position, err)
+			}
+
+			startingRow := 1
+			if piece.Colour == White {
+				startingRow = 6
+			}
+			if currentIndex[0] == startingRow { // If on starting row
+				yOffset := 2
+				if piece.Colour == White {
+					yOffset = -2
+				}
+				target, err := positionRelative(position, 0, yOffset)
+				if err != nil {
+					return nil, fmt.Errorf("pawn is on starting row but can't move forward by 2, this shouldn't happen - pos: '%v', target: '%v'", position, target)
+				}
+
+				if p, err := game.getPiece(target); err == nil && p.Class == Space {
+					output = append(output, target)
+				}
+			}
+		}
+		// Check left attack
+		yOffset = 1
+		if piece.Colour == White {
+			yOffset = -1
+		}
+
+		target, err = positionRelative(position, -1, yOffset)
+		if err == nil {
+			if p, err := game.getPiece(target); err == nil && p.Colour == opponentColour {
+				output = append(output, target)
+			}
+		}
+
+		// Check right attack
+		yOffset = 1
+		if piece.Colour == White {
+			yOffset = -1
+		}
+
+		target, err = positionRelative(position, 1, yOffset)
+		if err == nil {
+			if p, err := game.getPiece(target); err == nil && p.Colour == opponentColour {
+				output = append(output, target)
+			}
+		}
+	}
+
+	return output, nil
 }
 
 func (game *gameState) ExecuteMove(move string) error {
@@ -274,12 +373,18 @@ func (game *gameState) ExecuteMove(move string) error {
 		return err
 	}
 
-	if piece.Class == Space {
-		return fmt.Errorf("can't move empty space")
+	validMoves, err := game.GetValidMovesForPiece(moveFrom)
+	if err != nil {
+		log.Error(err)
 	}
 
-	game.setPiece(Pieces["space"], moveFrom)
-	game.setPiece(piece, moveTo)
+	if slices.Contains(validMoves, moveTo) {
+		game.setPiece(Pieces["space"], moveFrom)
+		game.setPiece(piece, moveTo)
+	} else {
+		log.Warn("Invalid move")
+		log.Warnf("%v", validMoves)
+	}
 
 	return nil
 }
