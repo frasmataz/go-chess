@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -32,7 +33,32 @@ func TestBoardFromFEN(t *testing.T) {
 					whiteKingCastle:  true,
 					whiteQueenCastle: true,
 				},
-				enPassantTarget: nil,
+				enPassantTarget: "",
+				halfmoveClock:   0,
+				fullmoveClock:   1,
+			},
+		},
+		"en passant": {
+			input: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+			want: gameState{
+				boardState: [8][8]Piece{
+					{GetPiece("blackRook"), GetPiece("blackKnight"), GetPiece("blackBishop"), GetPiece("blackQueen"), GetPiece("blackKing"), GetPiece("blackBishop"), GetPiece("blackKnight"), GetPiece("blackRook")},
+					{GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn")},
+					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
+					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
+					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("whitePawn"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
+					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
+					{GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("space"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn")},
+					{GetPiece("whiteRook"), GetPiece("whiteKnight"), GetPiece("whiteBishop"), GetPiece("whiteQueen"), GetPiece("whiteKing"), GetPiece("whiteBishop"), GetPiece("whiteKnight"), GetPiece("whiteRook")},
+				},
+				nextPlayer: Black,
+				castlingRights: castlingRights{
+					blackKingCastle:  true,
+					blackQueenCastle: true,
+					whiteKingCastle:  true,
+					whiteQueenCastle: true,
+				},
+				enPassantTarget: "e3",
 				halfmoveClock:   0,
 				fullmoveClock:   1,
 			},
@@ -47,6 +73,7 @@ func TestBoardFromFEN(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(*board, test.want) {
+				fmt.Print(board.PrintGameState())
 				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, *board)
 			}
 		})
@@ -56,34 +83,34 @@ func TestBoardFromFEN(t *testing.T) {
 func TestPositionToIndex(t *testing.T) {
 	type positionTest struct {
 		input     string
-		want      *[2]int
+		want      [2]int
 		wantError bool
 	}
 
 	tests := []positionTest{
 		{
 			input: "a1",
-			want:  &[2]int{7, 0},
+			want:  [2]int{7, 0},
 		},
 		{
 			input: "h8",
-			want:  &[2]int{0, 7},
+			want:  [2]int{0, 7},
 		},
 		{
 			input: "a8",
-			want:  &[2]int{0, 0},
+			want:  [2]int{0, 0},
 		},
 		{
 			input: "h1",
-			want:  &[2]int{7, 7},
+			want:  [2]int{7, 7},
 		},
 		{
 			input: "f6",
-			want:  &[2]int{2, 5},
+			want:  [2]int{2, 5},
 		},
 		{
 			input: "d2",
-			want:  &[2]int{6, 3},
+			want:  [2]int{6, 3},
 		},
 		{
 			input:     "A1",
@@ -145,7 +172,7 @@ func TestPositionToIndex(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
-			output, err := PositionToIndex(test.input)
+			output, err := positionToIndex(test.input)
 			if err != nil {
 				if !test.wantError {
 					t.Errorf("PositionToIndex threw unexpected error: %v", err)
@@ -162,4 +189,12 @@ func TestPositionToIndex(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPrintGameState(t *testing.T) {
+	board, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	if err != nil {
+		t.Errorf("error testing TestPrintGameState: %v", err)
+	}
+	t.Log(board.PrintGameState())
 }
