@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/fatih/color"
 )
 
 type Status int
@@ -182,20 +184,36 @@ func BoardFromFEN(fen string) (*gameState, error) {
 	return &board, nil
 }
 
+func NewGame() *gameState {
+	game, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	if err != nil {
+		panic(err)
+	}
+
+	return game
+}
+
 func (b *gameState) PrintGameState() string {
+	blackSquare := color.BgRGB(0, 0, 0)
+	whiteSquare := color.BgRGB(60, 50, 80)
+
 	output := "\n\n"
 
-	for _, row := range b.boardState {
-		rowString := ""
-		for _, column := range row {
-			rowString += string(column.Symbol)
+	for ri, row := range b.boardState {
+		rowString := fmt.Sprintf("%s ", strconv.Itoa(8-ri))
+		for ci, column := range row {
+			squareColour := blackSquare
+			if ri%2 == ci%2 {
+				squareColour = whiteSquare
+			}
+			rowString += squareColour.Sprint(string(column.Symbol) + " ")
 		}
 
 		rowString += "\n"
 		output += rowString
 	}
 
-	output += "\n\n"
+	output += "  a b c d e f g h \n\n"
 
 	player := PlayerColour(b.nextPlayer)
 	if player == White {
@@ -220,4 +238,48 @@ func (b *gameState) PrintGameState() string {
 	}
 
 	return output
+}
+
+func (game *gameState) getPiece(position string) (Piece, error) {
+	index, err := positionToIndex(position)
+	if err != nil {
+		return Piece{}, err
+	}
+
+	return game.boardState[index[0]][index[1]], nil
+}
+
+func (game *gameState) setPiece(piece Piece, position string) error {
+	index, err := positionToIndex(position)
+	if err != nil {
+		return err
+	}
+
+	game.boardState[index[0]][index[1]] = piece
+	return nil
+}
+
+func (game *gameState) ExecuteMove(move string) error {
+	moveRegex := `^[a-h]{1}[1-8]{1}[a-h]{1}[1-8]{1}$`
+	re := regexp.MustCompile(moveRegex)
+	if !re.MatchString(move) {
+		return fmt.Errorf("move did not match regex %v - got '%v'", moveRegex, move)
+	}
+
+	moveFrom := move[0:2]
+	moveTo := move[2:4]
+
+	piece, err := game.getPiece(moveFrom)
+	if err != nil {
+		return err
+	}
+
+	if piece.Class == Space {
+		return fmt.Errorf("can't move empty space")
+	}
+
+	game.setPiece(Pieces["space"], moveFrom)
+	game.setPiece(piece, moveTo)
+
+	return nil
 }
