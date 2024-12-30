@@ -275,6 +275,30 @@ func (b *gameState) PrintGameState() string {
 	return output
 }
 
+func (game *gameState) isSpaceValidAndEmpty(position string) bool {
+	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
+	p, err := game.getPiece(position)
+	if err != nil {
+		return false
+	}
+	if p.Class == Space {
+		return true
+	}
+	return false
+}
+
+func (game *gameState) isSpaceValidAndOpponentPiece(position string, opponentColor PlayerColour) bool {
+	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
+	p, err := game.getPiece(position)
+	if err != nil {
+		return false
+	}
+	if p.Colour == opponentColor {
+		return true
+	}
+	return false
+}
+
 func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) {
 	piece, err := game.getPiece(position)
 	if err != nil {
@@ -300,30 +324,36 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 		if err != nil {
 			log.Warn(err)
 		}
-		if p, err := game.getPiece(target); err == nil && p.Class == Space {
+		// Can only move there if space is empty
+		if game.isSpaceValidAndEmpty(target) {
 			output = append(output, target)
 
-			// Check two steps forward if still on starting row
+			// Also check two steps forward if still on starting row
 			currentIndex, err := positionToIndex(position)
 			if err != nil {
 				return nil, fmt.Errorf("piece in unexpected position - pos: %v, err: %v", position, err)
 			}
 
+			// Get starting row for player
 			startingRow := 1
 			if piece.Colour == White {
 				startingRow = 6
 			}
-			if currentIndex[0] == startingRow { // If on starting row
+
+			if currentIndex[0] == startingRow {
+				// Get space two ahead
 				yOffset := 2
 				if piece.Colour == White {
 					yOffset = -2
 				}
+
 				target, err := positionRelative(position, 0, yOffset)
 				if err != nil {
 					return nil, fmt.Errorf("pawn is on starting row but can't move forward by 2, this shouldn't happen - pos: '%v', target: '%v'", position, target)
 				}
 
-				if p, err := game.getPiece(target); err == nil && p.Class == Space {
+				// Can only move there if space if empty
+				if game.isSpaceValidAndEmpty(target) {
 					output = append(output, target)
 				}
 			}
@@ -336,7 +366,7 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 
 		target, err = positionRelative(position, -1, yOffset)
 		if err == nil {
-			if p, err := game.getPiece(target); err == nil && p.Colour == opponentColour {
+			if game.isSpaceValidAndOpponentPiece(target, opponentColour) {
 				output = append(output, target)
 			}
 		}
@@ -349,7 +379,7 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 
 		target, err = positionRelative(position, 1, yOffset)
 		if err == nil {
-			if p, err := game.getPiece(target); err == nil && p.Colour == opponentColour {
+			if game.isSpaceValidAndOpponentPiece(target, opponentColour) {
 				output = append(output, target)
 			}
 		}
