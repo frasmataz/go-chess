@@ -659,6 +659,10 @@ func (game *gameState) ExecuteMove(move string) error {
 		return err
 	}
 
+	if piece.Colour != game.nextPlayer {
+		return fmt.Errorf("piece doesn't belong to player - piece is '%v', turn is '%v'", piece.Colour, game.nextPlayer)
+	}
+
 	validMoves, err := game.GetValidMovesForPiece(moveFrom)
 	if err != nil {
 		log.Error(err)
