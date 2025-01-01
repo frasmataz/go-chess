@@ -407,3 +407,65 @@ func TestPawnMoves(t *testing.T) {
 		})
 	}
 }
+
+func TestKnightMoves(t *testing.T) {
+	type FENtest struct {
+		starting_state string
+		moves          []string
+		want           string
+		wantError      bool
+	}
+
+	tests := map[string]FENtest{
+		"valid moves": {
+			starting_state: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+			moves: []string{
+				"g1f3",
+				"g8f6",
+				"f3e5",
+				"f6d5",
+				"e5d7",
+				"d5b6",
+				"d7b6",
+				"b8c6",
+				"b1c3",
+				"c6d4",
+				"c3a4",
+				"d4e2",
+				"b6a8",
+			},
+			want:      "N1bqkb1r/ppp1pppp/8/8/N7/8/PPPPnPPP/R1BQKB1R b KQk - 0 7",
+			wantError: false,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			game, err := BoardFromFEN(test.starting_state)
+			if err != nil {
+				t.Error(err)
+			}
+
+			for _, move := range test.moves {
+				err := game.ExecuteMove(move)
+				if err != nil {
+					if !test.wantError {
+						t.Errorf("unexpected error executing move - test: '%v', move: '%v', err: '%v'", test, move, err)
+					}
+					return
+				}
+			}
+
+			if test.wantError {
+				t.Errorf("did not throw error as expected - test: '%v''", test)
+				return
+			}
+
+			output := game.BoardToFEN()
+			if !reflect.DeepEqual(output, test.want) {
+				fmt.Print(game.PrintGameState())
+				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, output)
+			}
+		})
+	}
+}

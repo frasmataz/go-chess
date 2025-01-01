@@ -108,6 +108,15 @@ func (game *gameState) setPiece(piece Piece, position string) error {
 	return nil
 }
 
+func (game *gameState) getPieceSafe(position string) Piece {
+	index, err := positionToIndex(position)
+	if err != nil {
+		panic(err)
+	}
+
+	return game.boardState[index[0]][index[1]]
+}
+
 func NewGame() *gameState {
 	game, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 	if err != nil {
@@ -382,6 +391,18 @@ func (game *gameState) isSpaceValidAndOpponentPiece(position string, opponentCol
 	return false
 }
 
+func (game *gameState) isSpaceValidAndEmptyOrOpponentPiece(position string, opponentColor PlayerColour) bool {
+	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
+	p, err := game.getPiece(position)
+	if err != nil {
+		return false
+	}
+	if p.Class == Space || p.Colour == opponentColor {
+		return true
+	}
+	return false
+}
+
 func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) {
 	piece, err := game.getPiece(position)
 	if err != nil {
@@ -467,11 +488,63 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 				output = append(output, target)
 			}
 		}
-
 		//TODO: En passant capture
+	case Knight:
+		target_offsets := [][2]int{
+			{1, 2},
+			{2, 1},
+			{-1, 2},
+			{2, -1},
+			{1, -2},
+			{-2, 1},
+			{-1, -2},
+			{-2, -1},
+		}
+
+		for _, offset := range target_offsets {
+			target, err := positionRelative(position, offset[0], offset[1])
+			if err == nil {
+				if game.isSpaceValidAndEmptyOrOpponentPiece(target, opponentColour) {
+					output = append(output, target)
+				}
+			}
+		}
+	}
+	return output, nil
+}
+
+func (game *gameState) updateCastlingRights() {
+	if game.castlingRights.whiteKingCastle {
+		kingStartSpace := game.getPieceSafe("e1")
+		rookStartSpace := game.getPieceSafe("h1")
+		if !(kingStartSpace.Class == King && kingStartSpace.Colour == White) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == White) {
+			game.castlingRights.whiteKingCastle = false
+		}
 	}
 
-	return output, nil
+	if game.castlingRights.whiteQueenCastle {
+		kingStartSpace := game.getPieceSafe("e1")
+		rookStartSpace := game.getPieceSafe("a1")
+		if !(kingStartSpace.Class == King && kingStartSpace.Colour == White) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == White) {
+			game.castlingRights.whiteQueenCastle = false
+		}
+	}
+
+	if game.castlingRights.blackKingCastle {
+		kingStartSpace := game.getPieceSafe("e8")
+		rookStartSpace := game.getPieceSafe("h8")
+		if !(kingStartSpace.Class == King && kingStartSpace.Colour == Black) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == Black) {
+			game.castlingRights.blackKingCastle = false
+		}
+	}
+
+	if game.castlingRights.blackQueenCastle {
+		kingStartSpace := game.getPieceSafe("e8")
+		rookStartSpace := game.getPieceSafe("a8")
+		if !(kingStartSpace.Class == King && kingStartSpace.Colour == Black) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == Black) {
+			game.castlingRights.blackQueenCastle = false
+		}
+	}
 }
 
 func (game *gameState) ExecuteMove(move string) error {
@@ -503,6 +576,7 @@ func (game *gameState) ExecuteMove(move string) error {
 		} else {
 			game.nextPlayer = Black
 		}
+		game.updateCastlingRights()
 	} else {
 		return fmt.Errorf("invalid move '%v' - valid moves for piece are '%v'", move, validMoves)
 	}
