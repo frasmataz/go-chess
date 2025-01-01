@@ -228,6 +228,89 @@ func BoardFromFEN(fen string) (*gameState, error) {
 	return &board, nil
 }
 
+func (game *gameState) BoardToFEN() string {
+	// Converts a FEN board state string into a board objectgo run
+	// https://www.chess.com/terms/fen-chess
+
+	output := ""
+
+	// First segment describes layout of pieces on the board
+
+	for rownum, row := range game.boardState {
+		rowString := ""
+		spaceCount := 0
+		for _, piece := range row {
+			if piece.Class == Space {
+				spaceCount++
+			} else {
+				if spaceCount != 0 {
+					rowString += strconv.Itoa(spaceCount)
+					spaceCount = 0
+				}
+				rowString += string(piece.FENSymbol)
+			}
+
+		}
+		if spaceCount != 0 {
+			rowString += strconv.Itoa(spaceCount)
+			spaceCount = 0
+		}
+		if rownum < 7 {
+			rowString += "/"
+		} else {
+			rowString += " "
+		}
+		output += rowString
+	}
+
+	// Second segment describes whose turn it is
+	if game.nextPlayer == Black {
+		output += "b"
+	} else {
+		output += "w"
+	}
+
+	output += " "
+
+	// Third segment describes castling rights
+	if !(game.castlingRights.whiteKingCastle || game.castlingRights.whiteQueenCastle || game.castlingRights.blackKingCastle || game.castlingRights.blackQueenCastle) {
+		output += "-"
+	} else {
+		if game.castlingRights.whiteKingCastle {
+			output += "K"
+		}
+		if game.castlingRights.whiteQueenCastle {
+			output += "Q"
+		}
+		if game.castlingRights.blackKingCastle {
+			output += "k"
+		}
+		if game.castlingRights.blackQueenCastle {
+			output += "q"
+		}
+	}
+
+	output += " "
+
+	// Fourth segment describes en passant targets
+	if game.enPassantTarget == "" {
+		output += "-"
+	} else {
+		output += game.enPassantTarget
+	}
+
+	output += " "
+
+	// Fifth segment counts halfmoves
+	output += strconv.Itoa(game.halfmoveClock)
+	output += " "
+
+	// Sixth segment counts halfmoves
+	output += strconv.Itoa(game.fullmoveClock)
+
+	return output
+}
+
 func (b *gameState) PrintGameState() string {
 	blackSquare := color.BgRGB(0, 0, 0)
 	whiteSquare := color.BgRGB(60, 50, 80)
@@ -314,7 +397,8 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 		opponentColour = White
 	}
 
-	if piece.Class == Pawn {
+	switch piece.Class {
+	case Pawn:
 		// Check one step forward
 		yOffset := 1
 		if piece.Colour == White {
@@ -383,6 +467,8 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 				output = append(output, target)
 			}
 		}
+
+		//TODO: En passant capture
 	}
 
 	return output, nil

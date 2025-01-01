@@ -13,6 +13,7 @@ func main() {
 
 	for {
 		fmt.Print(game.PrintGameState())
+		fmt.Println(game.BoardToFEN())
 		fmt.Print("Enter a move: ")
 
 		var input string
