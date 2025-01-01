@@ -6,62 +6,32 @@ import (
 	"testing"
 )
 
-func TestBoardFromFEN(t *testing.T) {
+func TestFENConversion(t *testing.T) {
 	type FENtest struct {
 		input string
-		want  gameState
+		want  string
 	}
 
 	tests := map[string]FENtest{
 		"starting_state": {
 			input: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-			want: gameState{
-				boardState: [8][8]Piece{
-					{GetPiece("blackRook"), GetPiece("blackKnight"), GetPiece("blackBishop"), GetPiece("blackQueen"), GetPiece("blackKing"), GetPiece("blackBishop"), GetPiece("blackKnight"), GetPiece("blackRook")},
-					{GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn")},
-					{GetPiece("whiteRook"), GetPiece("whiteKnight"), GetPiece("whiteBishop"), GetPiece("whiteQueen"), GetPiece("whiteKing"), GetPiece("whiteBishop"), GetPiece("whiteKnight"), GetPiece("whiteRook")},
-				},
-				nextPlayer: White,
-				castlingRights: castlingRights{
-					blackKingCastle:  true,
-					blackQueenCastle: true,
-					whiteKingCastle:  true,
-					whiteQueenCastle: true,
-				},
-				enPassantTarget: "",
-				halfmoveClock:   0,
-				fullmoveClock:   1,
-			},
+			want:  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
 		},
 		"en passant": {
 			input: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-			want: gameState{
-				boardState: [8][8]Piece{
-					{GetPiece("blackRook"), GetPiece("blackKnight"), GetPiece("blackBishop"), GetPiece("blackQueen"), GetPiece("blackKing"), GetPiece("blackBishop"), GetPiece("blackKnight"), GetPiece("blackRook")},
-					{GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn"), GetPiece("blackPawn")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("whitePawn"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space"), GetPiece("space")},
-					{GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("space"), GetPiece("whitePawn"), GetPiece("whitePawn"), GetPiece("whitePawn")},
-					{GetPiece("whiteRook"), GetPiece("whiteKnight"), GetPiece("whiteBishop"), GetPiece("whiteQueen"), GetPiece("whiteKing"), GetPiece("whiteBishop"), GetPiece("whiteKnight"), GetPiece("whiteRook")},
-				},
-				nextPlayer: Black,
-				castlingRights: castlingRights{
-					blackKingCastle:  true,
-					blackQueenCastle: true,
-					whiteKingCastle:  true,
-					whiteQueenCastle: true,
-				},
-				enPassantTarget: "e3",
-				halfmoveClock:   0,
-				fullmoveClock:   1,
-			},
+			want:  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+		},
+		"no castling": {
+			input: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b - - 0 1",
+			want:  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b - - 0 1",
+		},
+		"castling": {
+			input: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w Qk - 0 1",
+			want:  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w Qk - 0 1",
+		},
+		"movecounts": {
+			input: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w k - 49 75",
+			want:  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w k - 49 75",
 		},
 	}
 
@@ -72,9 +42,10 @@ func TestBoardFromFEN(t *testing.T) {
 				t.Error(err)
 			}
 
-			if !reflect.DeepEqual(*board, test.want) {
+			output := board.BoardToFEN()
+			if !reflect.DeepEqual(output, test.want) {
 				fmt.Print(board.PrintGameState())
-				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, *board)
+				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, output)
 			}
 		})
 	}
@@ -268,4 +239,58 @@ func TestPrintGameState(t *testing.T) {
 		t.Errorf("error testing TestPrintGameState: %v", err)
 	}
 	t.Log(board.PrintGameState())
+}
+
+func TestPawnMoves(t *testing.T) {
+	type FENtest struct {
+		starting_state string
+		moves          []string
+		want           string
+	}
+
+	tests := map[string]FENtest{
+		"edges": {
+			starting_state: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+			moves: []string{
+				"a2a4",
+				"a7a5",
+				"h2h4",
+				"h7h5",
+			},
+			want: "rnbqkbnr/1pppppp1/8/p6p/P6P/8/1PPPPPP1/RNBQKBNR w KQkq - 0 3",
+		},
+		"capture": {
+			starting_state: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+			moves: []string{
+				"f2f4",
+				"c7c5",
+				"f4f5",
+				"c5c4",
+				"f5f6",
+				"c4c3",
+				"f6e7",
+				"c3d2",
+			},
+			want: "rnbqkbnr/pp1pPppp/8/8/8/8/PPPpP1PP/RNBQKBNR w KQkq - 0 5",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			game, err := BoardFromFEN(test.starting_state)
+			if err != nil {
+				t.Error(err)
+			}
+
+			for _, move := range test.moves {
+				game.ExecuteMove(move)
+			}
+
+			output := game.BoardToFEN()
+			if !reflect.DeepEqual(output, test.want) {
+				fmt.Print(game.PrintGameState())
+				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, output)
+			}
+		})
+	}
 }

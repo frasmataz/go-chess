@@ -497,6 +497,12 @@ func (game *gameState) ExecuteMove(move string) error {
 	if slices.Contains(validMoves, moveTo) {
 		game.setPiece(Pieces["space"], moveFrom)
 		game.setPiece(piece, moveTo)
+		if game.nextPlayer == Black {
+			game.nextPlayer = White
+			game.fullmoveClock++
+		} else {
+			game.nextPlayer = Black
+		}
 	} else {
 		log.Warn("Invalid move")
 		log.Warnf("%v", validMoves)
