@@ -504,8 +504,7 @@ func (game *gameState) ExecuteMove(move string) error {
 			game.nextPlayer = Black
 		}
 	} else {
-		log.Warn("Invalid move")
-		log.Warnf("%v", validMoves)
+		return fmt.Errorf("invalid move '%v' - valid moves for piece are '%v'", move, validMoves)
 	}
 
 	return nil
