@@ -585,6 +585,26 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 				current_pos = target
 			}
 		}
+	case King:
+		target_offsets := [][2]int{
+			{1, 1},
+			{1, 0},
+			{1, -1},
+			{0, 1},
+			{0, -1},
+			{-1, 1},
+			{-1, 0},
+			{-1, -1},
+		}
+
+		for _, offset := range target_offsets {
+			target, err := positionRelative(position, offset[0], offset[1])
+			if err == nil {
+				if game.isSpaceValidAndEmptyOrOpponentPiece(target, opponentColour) {
+					output = append(output, target)
+				}
+			}
+		}
 	}
 
 	return output, nil
