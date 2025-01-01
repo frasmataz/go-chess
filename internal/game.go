@@ -509,7 +509,32 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]string, error) 
 				}
 			}
 		}
+	case Bishop:
+		direction_offsets := [][2]int{
+			{1, 1},
+			{1, -1},
+			{-1, 1},
+			{-1, -1},
+		}
+
+		for _, direction_offset := range direction_offsets {
+			current_pos := position
+			for {
+				target, err := positionRelative(current_pos, direction_offset[0], direction_offset[1])
+				if err != nil {
+					break
+				}
+				if game.isSpaceValidAndEmpty(target) {
+					output = append(output, target)
+				} else if game.isSpaceValidAndOpponentPiece(target, opponentColour) {
+					output = append(output, target)
+					break
+				}
+				current_pos = target
+			}
+		}
 	}
+
 	return output, nil
 }
 
