@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/gofiber/fiber/v2/log"
 
@@ -9,17 +12,33 @@ import (
 )
 
 func main() {
-	game := game.NewGame()
+	fmt.Print("Enter starting FEN, or leave blank for new game: ")
+
+	in := bufio.NewReader(os.Stdin)
+	fen, err := in.ReadString('\n')
+	if err != nil {
+		panic(err)
+	}
+
+	gameState := game.NewGame()
+
+	if fen != "" {
+		fen = strings.TrimSuffix(fen, "\n")
+		gameState, err = game.BoardFromFEN(fen)
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	for {
-		fmt.Print(game.PrintGameState())
-		fmt.Println(game.BoardToFEN())
+		fmt.Print(gameState.PrintGameState())
+		fmt.Println(gameState.BoardToFEN())
 		fmt.Print("Enter a move: ")
 
-		var input string
-		fmt.Scanln(&input)
+		var move string
+		fmt.Scanln(&move)
 
-		err := game.ExecuteMove(input)
+		err := gameState.ExecuteMove(move)
 		if err != nil {
 			log.Error(err)
 		}

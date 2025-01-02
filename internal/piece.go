@@ -14,14 +14,6 @@ const (
 	King
 )
 
-type PlayerColour int
-
-const (
-	Undefined PlayerColour = iota
-	Black
-	White
-)
-
 type Piece struct {
 	Class     PieceClass
 	Colour    PlayerColour
