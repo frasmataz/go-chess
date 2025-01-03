@@ -255,13 +255,17 @@ func (game *gameState) ExecuteMove(uciMoveString string) error {
 
 		newstate.nextPlayer = game.nextPlayer.getOpponentColour()
 		newstate.updateCastlingRights()
+
+		if newstate.playerIsInCheckmate(game.nextPlayer.getOpponentColour()) {
+			panic("CHECKMATE BABYYY")
+		}
+
 		game.boardState = newstate.boardState
 		game.castlingRights = newstate.castlingRights
 		game.enPassantTarget = newstate.enPassantTarget
 		game.fullmoveClock = newstate.fullmoveClock
 		game.halfmoveClock = newstate.halfmoveClock
 		game.nextPlayer = newstate.nextPlayer
-
 	} else {
 		return fmt.Errorf("invalid move '%v' - valid moves for piece are '%v'", uciMoveString, validMoves)
 	}
@@ -753,4 +757,9 @@ func (game *gameState) playerIsInCheck(player PlayerColour) bool {
 		}
 	}
 	return false
+}
+
+func (game *gameState) playerIsInCheckmate(player PlayerColour) bool {
+	moves, _ := game.GetValidMovesForPlayer(player.getOpponentColour())
+	return len(moves) == 0
 }

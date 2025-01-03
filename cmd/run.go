@@ -22,8 +22,8 @@ func main() {
 
 	gameState := game.NewGame()
 
+	fen = strings.TrimSuffix(fen, "\n")
 	if fen != "" {
-		fen = strings.TrimSuffix(fen, "\n")
 		gameState, err = game.BoardFromFEN(fen)
 		if err != nil {
 			panic(err)
