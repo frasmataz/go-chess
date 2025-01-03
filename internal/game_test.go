@@ -709,3 +709,130 @@ func TestKingMoves(t *testing.T) {
 
 	}
 }
+
+func TestSelfCheckPrevention(t *testing.T) {
+	type FENtest struct {
+		starting_state string
+		moves          []string
+		want           string
+		wantError      bool
+	}
+
+	tests := map[string]FENtest{
+		"pawn/w/1": {
+			starting_state: "8/8/4k3/3p4/8/3K4/8/8 w - - 0 2",
+			moves: []string{
+				"d3c4",
+			},
+			wantError: true,
+		},
+		"pawn/w/2": {
+			starting_state: "8/8/4k3/3p4/8/3K4/8/8 w - - 0 2",
+			moves: []string{
+				"d3e4",
+			},
+			wantError: true,
+		},
+		"pawn/w/3": {
+			starting_state: "8/8/4k3/3p4/8/3K4/8/8 w - - 0 2",
+			moves: []string{
+				"d3d4",
+			},
+			want: "8/8/4k3/3p4/3K4/8/8/8 b - - 1 2",
+		},
+		"pawn/b/1": {
+			starting_state: "8/8/4k3/8/4P3/3K4/8/8 b - - 0 2",
+			moves: []string{
+				"e6f5",
+			},
+			wantError: true,
+		},
+		"pawn/b/2": {
+			starting_state: "8/8/4k3/8/4P3/3K4/8/8 b - - 0 2",
+			moves: []string{
+				"e6d5",
+			},
+			wantError: true,
+		},
+		"pawn/b/3": {
+			starting_state: "8/8/4k3/8/4P3/3K4/8/8 b - - 0 2",
+			moves: []string{
+				"e6e5",
+			},
+			want: "8/8/8/4k3/4P3/3K4/8/8 w - - 1 3",
+		},
+		"bishop/w/1": {
+			starting_state: "8/8/4k3/2b5/8/3K4/8/8 w - - 0 2",
+			moves: []string{
+				"d3d4",
+			},
+			wantError: true,
+		},
+		"bishop/w/2": {
+			starting_state: "8/8/4k3/2b5/8/3K4/8/8 w - - 0 2",
+			moves: []string{
+				"d3e3",
+			},
+			wantError: true,
+		},
+		"bishop/w/3": {
+			starting_state: "8/8/4k3/2b5/8/3K4/8/8 w - - 0 2",
+			moves: []string{
+				"d3c4",
+			},
+			want: "8/8/4k3/2b5/2K5/8/8/8 b - - 1 2",
+		},
+		"bishop/b/1": {
+			starting_state: "8/8/4k3/8/2K2B2/8/8/8 b - - 0 2",
+			moves: []string{
+				"e6d6",
+			},
+			wantError: true,
+		},
+		"bishop/b/2": {
+			starting_state: "8/8/4k3/8/2K2B2/8/8/8 b - - 0 2",
+			moves: []string{
+				"e6e5",
+			},
+			wantError: true,
+		},
+		"bishop/b/3": {
+			starting_state: "8/8/4k3/8/2K2B2/8/8/8 b - - 0 2",
+			moves: []string{
+				"e6f5",
+			},
+			want: "8/8/8/5k2/2K2B2/8/8/8 w - - 1 3",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			game, err := BoardFromFEN(test.starting_state)
+			if err != nil {
+				t.Error(err)
+			}
+
+			for _, move := range test.moves {
+				err := game.ExecuteMove(move)
+				if err != nil {
+					if !test.wantError {
+						t.Errorf("unexpected error executing move - test: '%v', move: '%v', err: '%v'", test, move, err)
+					}
+					return
+				}
+			}
+
+			if test.wantError {
+				t.Errorf("did not throw error as expected - test: '%v''", test)
+				return
+			}
+
+			output := game.BoardToFEN()
+			if !reflect.DeepEqual(output, test.want) {
+				fmt.Print(game.PrintGameState())
+				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, output)
+			}
+		})
+
+	}
+}

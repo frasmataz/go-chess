@@ -226,17 +226,27 @@ func (game *gameState) ExecuteMove(uciMoveString string) error {
 
 	newstate := *game
 
-	validMoves, _, err := game.GetValidMovesForPiece(move.from)
+	validMoves, threats, err := game.GetValidMovesForPiece(move.from)
 	if err != nil {
 		log.Error(err)
 	}
 
 	if slices.Contains(validMoves, *move) {
+		capture := false
+		if slices.Contains(threats, *move) {
+			capture = true
+		}
+
 		newstate.setPiece(Pieces["space"], move.from)
 		newstate.setPiece(piece, move.to)
 
 		if newstate.playerIsInCheck(game.nextPlayer) {
 			return fmt.Errorf("cannot put yourself in check - '%v'", uciMoveString)
+		}
+
+		newstate.halfmoveClock++
+		if capture || piece.Class == Pawn {
+			newstate.halfmoveClock = 0
 		}
 
 		if game.nextPlayer == Black {
