@@ -803,6 +803,174 @@ func TestSelfCheckPrevention(t *testing.T) {
 			},
 			want: "8/8/8/5k2/2K2B2/8/8/8 w - - 1 3",
 		},
+		"knight/w/1": {
+			starting_state: "8/8/2n2k2/8/8/2K2N2/8/8 w - - 0 1",
+			moves: []string{
+				"c3b4",
+			},
+			wantError: true,
+		},
+		"knight/w/2": {
+			starting_state: "8/8/2n2k2/8/8/2K2N2/8/8 w - - 0 1",
+			moves: []string{
+				"c3d4",
+			},
+			wantError: true,
+		},
+		"knight/w/3": {
+			starting_state: "8/8/2n2k2/8/8/2K2N2/8/8 w - - 0 1",
+			moves: []string{
+				"c3d2",
+			},
+			want: "8/8/2n2k2/8/8/5N2/3K4/8 b - - 1 1",
+		},
+		"knight/b/1": {
+			starting_state: "8/8/2n2k2/8/8/2K2N2/8/8 b - - 0 1",
+			moves: []string{
+				"f6g5",
+			},
+			wantError: true,
+		},
+		"knight/b/2": {
+			starting_state: "8/8/2n2k2/8/8/2K2N2/8/8 b - - 0 1",
+			moves: []string{
+				"f6e5",
+			},
+			wantError: true,
+		},
+		"knight/b/3": {
+			starting_state: "8/8/2n2k2/8/8/2K2N2/8/8 b - - 0 1",
+			moves: []string{
+				"f6e7",
+			},
+			want: "8/4k3/2n5/8/8/2K2N2/8/8 w - - 1 2",
+		},
+		"rook/w/1": {
+			starting_state: "8/8/3r1k2/8/8/2K1R3/8/8 w - - 0 1",
+			moves: []string{
+				"c3d3",
+			},
+			wantError: true,
+		},
+		"rook/w/2": {
+			starting_state: "8/8/3r1k2/8/8/2K1R3/8/8 w - - 0 1",
+			moves: []string{
+				"c3d4",
+			},
+			wantError: true,
+		},
+		"rook/w/3": {
+			starting_state: "8/8/3r1k2/8/8/2K1R3/8/8 w - - 0 1",
+			moves: []string{
+				"c3c4",
+			},
+			want: "8/8/3r1k2/8/2K5/4R3/8/8 b - - 1 1",
+		},
+		"rook/b/1": {
+			starting_state: "8/8/3r1k2/8/8/2K1R3/8/8 b - - 0 1",
+			moves: []string{
+				"f6e6",
+			},
+			wantError: true,
+		},
+		"rook/b/2": {
+			starting_state: "8/8/3r1k2/8/8/2K1R3/8/8 b - - 0 1",
+			moves: []string{
+				"f6e5",
+			},
+			wantError: true,
+		},
+		"rook/b/3": {
+			starting_state: "8/8/3r1k2/8/8/2K1R3/8/8 b - - 0 1",
+			moves: []string{
+				"f6f5",
+			},
+			want: "8/8/3r4/5k2/8/2K1R3/8/8 w - - 1 2",
+		},
+		"queen/w/1": {
+			starting_state: "8/8/5k2/3q4/4Q3/2K5/8/8 w - - 0 1",
+			moves: []string{
+				"c3d3",
+			},
+			wantError: true,
+		},
+		"queen/w/2": {
+			starting_state: "8/8/5k2/3q4/4Q3/2K5/8/8 w - - 0 1",
+			moves: []string{
+				"c3c4",
+			},
+			wantError: true,
+		},
+		"queen/w/3": {
+			starting_state: "8/8/5k2/3q4/4Q3/2K5/8/8 w - - 0 1",
+			moves: []string{
+				"c3b4",
+			},
+			want: "8/8/5k2/3q4/1K2Q3/8/8/8 b - - 1 1",
+		},
+		"queen/b/1": {
+			starting_state: "8/8/5k2/3q4/4Q3/2K5/8/8 b - - 0 1",
+			moves: []string{
+				"f6e5",
+			},
+			wantError: true,
+		},
+		"queen/b/2": {
+			starting_state: "8/8/5k2/3q4/4Q3/2K5/8/8 b - - 0 1",
+			moves: []string{
+				"f6f5",
+			},
+			wantError: true,
+		},
+		"queen/b/3": {
+			starting_state: "8/8/5k2/3q4/4Q3/2K5/8/8 b - - 0 1",
+			moves: []string{
+				"f6g5",
+			},
+			want: "8/8/8/3q2k1/4Q3/2K5/8/8 w - - 1 2",
+		},
+		"king/w/1": {
+			starting_state: "8/8/8/4k3/2K5/8/8/8 w - - 0 1",
+			moves: []string{
+				"c4d5",
+			},
+			wantError: true,
+		},
+		"king/w/2": {
+			starting_state: "8/8/8/4k3/2K5/8/8/8 w - - 0 1",
+			moves: []string{
+				"c4d4",
+			},
+			wantError: true,
+		},
+		"king/w/3": {
+			starting_state: "8/8/8/4k3/2K5/8/8/8 w - - 0 1",
+			moves: []string{
+				"c4d3",
+			},
+			want: "8/8/8/4k3/8/3K4/8/8 b - - 1 1",
+		},
+		"king/b/1": {
+			starting_state: "8/8/8/4k3/2K5/8/8/8 b - - 0 1",
+			moves: []string{
+				"e5d4",
+			},
+			wantError: true,
+		},
+		"king/b/2": {
+			starting_state: "8/8/8/4k3/2K5/8/8/8 b - - 0 1",
+			moves: []string{
+				"e5d5",
+			},
+			wantError: true,
+		},
+		"king/b/3": {
+			starting_state: "8/8/8/4k3/2K5/8/8/8 b - - 0 1",
+			moves: []string{
+				"e5d6",
+			},
+			want: "8/8/3k4/8/2K5/8/8/8 w - - 1 2",
+		},
 	}
 
 	for name, test := range tests {
@@ -833,6 +1001,5 @@ func TestSelfCheckPrevention(t *testing.T) {
 				t.Errorf("board did not match expected state.\n\nexpected:\n%v\n\ngot:\n%v\n\n", test.want, output)
 			}
 		})
-
 	}
 }
