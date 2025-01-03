@@ -36,87 +36,6 @@ type gameState struct {
 	fullmoveClock   int
 }
 
-func validatePosition(position string) bool {
-	positionRegex := `^[a-h]{1}[1-8]{1}$`
-	re := regexp.MustCompile(positionRegex)
-	return re.MatchString(position)
-}
-
-func positionToIndex(position string) ([2]int, error) {
-	// Converts standard board position (eg. "e4") to indeces in the [8][8]Piece board state
-
-	if !validatePosition(position) {
-		return [2]int{-1, -1}, fmt.Errorf("position string invalid - got '%v'", position)
-	}
-
-	colIndex := int(position[0]) - 97 // 97 is int value of rune 'a'
-	if colIndex < 0 || colIndex > 7 {
-		return [2]int{-1, -1}, fmt.Errorf("parsed row out-of-bounds, should be in range 0-7 - input '%v', parsed to row %v", position, colIndex)
-	}
-
-	rowRawInt, err := strconv.Atoi(string(rune(position[1]))) // FIXME: this can't be the best way
-	if err != nil {
-		return [2]int{-1, -1}, err
-	}
-
-	rowIndex := 8 - int(rowRawInt) // board row indeces are top-down, position strings are bottom-up
-	if rowIndex < 0 || rowIndex > 7 {
-		return [2]int{-1, -1}, fmt.Errorf("parsed column out-of-bounds, should be in range 0-7 - input '%v', parsed to column %v", position, rowIndex)
-	}
-
-	return [2]int{rowIndex, colIndex}, nil
-}
-
-func indexToPosition(index [2]int) (string, error) {
-	if index[0] < 0 || index[0] > 7 || index[1] < 0 || index[1] > 7 {
-		return "", fmt.Errorf("input indeces must both be between 0 - 7 inclusive - got '%v'", index)
-	}
-
-	return fmt.Sprintf("%c%s", rune(index[1]+97), strconv.Itoa(8-index[0])), nil
-}
-
-func positionRelative(position string, offsetX int, offsetY int) (string, error) {
-	startingIndex, err := positionToIndex(position)
-	if err != nil {
-		return "", err
-	}
-
-	output, err := indexToPosition([2]int{startingIndex[0] + offsetY, startingIndex[1] + offsetX})
-	if err != nil {
-		return "", err
-	}
-
-	return output, nil
-}
-
-func (game *gameState) getPiece(position string) (Piece, error) {
-	index, err := positionToIndex(position)
-	if err != nil {
-		return Piece{}, err
-	}
-
-	return game.boardState[index[0]][index[1]], nil
-}
-
-func (game *gameState) setPiece(piece Piece, position string) error {
-	index, err := positionToIndex(position)
-	if err != nil {
-		return err
-	}
-
-	game.boardState[index[0]][index[1]] = piece
-	return nil
-}
-
-func (game *gameState) getPieceSafe(position string) Piece {
-	index, err := positionToIndex(position)
-	if err != nil {
-		panic(err)
-	}
-
-	return game.boardState[index[0]][index[1]]
-}
-
 func NewGame() *gameState {
 	game, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 	if err != nil {
@@ -237,6 +156,109 @@ func BoardFromFEN(fen string) (*gameState, error) {
 	return &board, nil
 }
 
+func validatePosition(position string) bool {
+	positionRegex := `^[a-h]{1}[1-8]{1}$`
+	re := regexp.MustCompile(positionRegex)
+	return re.MatchString(position)
+}
+
+func positionToIndex(position string) ([2]int, error) {
+	// Converts standard board position (eg. "e4") to indeces in the [8][8]Piece board state
+
+	if !validatePosition(position) {
+		return [2]int{-1, -1}, fmt.Errorf("position string invalid - got '%v'", position)
+	}
+
+	colIndex := int(position[0]) - 97 // 97 is int value of rune 'a'
+	if colIndex < 0 || colIndex > 7 {
+		return [2]int{-1, -1}, fmt.Errorf("parsed row out-of-bounds, should be in range 0-7 - input '%v', parsed to row %v", position, colIndex)
+	}
+
+	rowRawInt, err := strconv.Atoi(string(rune(position[1]))) // FIXME: this can't be the best way
+	if err != nil {
+		return [2]int{-1, -1}, err
+	}
+
+	rowIndex := 8 - int(rowRawInt) // board row indeces are top-down, position strings are bottom-up
+	if rowIndex < 0 || rowIndex > 7 {
+		return [2]int{-1, -1}, fmt.Errorf("parsed column out-of-bounds, should be in range 0-7 - input '%v', parsed to column %v", position, rowIndex)
+	}
+
+	return [2]int{rowIndex, colIndex}, nil
+}
+
+func indexToPosition(index [2]int) (string, error) {
+	if index[0] < 0 || index[0] > 7 || index[1] < 0 || index[1] > 7 {
+		return "", fmt.Errorf("input indeces must both be between 0 - 7 inclusive - got '%v'", index)
+	}
+
+	return fmt.Sprintf("%c%s", rune(index[1]+97), strconv.Itoa(8-index[0])), nil
+}
+
+func positionRelative(position string, offsetX int, offsetY int) (string, error) {
+	startingIndex, err := positionToIndex(position)
+	if err != nil {
+		return "", err
+	}
+
+	output, err := indexToPosition([2]int{startingIndex[0] + offsetY, startingIndex[1] + offsetX})
+	if err != nil {
+		return "", err
+	}
+
+	return output, nil
+}
+
+func (game *gameState) ExecuteMove(uciMoveString string) error {
+	move, err := UCIToMove(uciMoveString)
+	if err != nil {
+		return fmt.Errorf("error parsing move: %v", err)
+	}
+
+	piece, err := game.getPiece(move.from)
+	if err != nil {
+		return err
+	}
+
+	if piece.Colour != game.nextPlayer {
+		return fmt.Errorf("piece doesn't belong to player - piece is '%v', turn is '%v'", piece.Colour, game.nextPlayer)
+	}
+
+	newstate := *game
+
+	validMoves, _, err := game.GetValidMovesForPiece(move.from)
+	if err != nil {
+		log.Error(err)
+	}
+
+	if slices.Contains(validMoves, *move) {
+		newstate.setPiece(Pieces["space"], move.from)
+		newstate.setPiece(piece, move.to)
+
+		if newstate.playerIsInCheck(game.nextPlayer) {
+			return fmt.Errorf("cannot put yourself in check - '%v'", uciMoveString)
+		}
+
+		if game.nextPlayer == Black {
+			newstate.fullmoveClock++
+		}
+
+		newstate.nextPlayer = game.nextPlayer.getOpponentColour()
+		newstate.updateCastlingRights()
+		game.boardState = newstate.boardState
+		game.castlingRights = newstate.castlingRights
+		game.enPassantTarget = newstate.enPassantTarget
+		game.fullmoveClock = newstate.fullmoveClock
+		game.halfmoveClock = newstate.halfmoveClock
+		game.nextPlayer = newstate.nextPlayer
+
+	} else {
+		return fmt.Errorf("invalid move '%v' - valid moves for piece are '%v'", uciMoveString, validMoves)
+	}
+
+	return nil
+}
+
 func (game *gameState) BoardToFEN() string {
 	// Converts a FEN board state string into a board objectgo run
 	// https://www.chess.com/terms/fen-chess
@@ -320,13 +342,13 @@ func (game *gameState) BoardToFEN() string {
 	return output
 }
 
-func (b *gameState) PrintGameState() string {
+func (game *gameState) PrintGameState() string {
 	blackSquare := color.BgRGB(0, 0, 0)
 	whiteSquare := color.BgRGB(60, 50, 80)
 
 	output := "\n\n"
 
-	for ri, row := range b.boardState {
+	for ri, row := range game.boardState {
 		rowString := fmt.Sprintf("%s ", strconv.Itoa(8-ri))
 		for ci, column := range row {
 			squareColour := blackSquare
@@ -342,7 +364,7 @@ func (b *gameState) PrintGameState() string {
 
 	output += "  a b c d e f g h \n\n"
 
-	player := PlayerColour(b.nextPlayer)
+	player := PlayerColour(game.nextPlayer)
 	if player == White {
 		output += "White to play.\n"
 	} else if player == Black {
@@ -351,23 +373,51 @@ func (b *gameState) PrintGameState() string {
 		output += "Game stopped.\n"
 	}
 
-	output += fmt.Sprintf("Halfmoves: %v  Fullmoves: %v\n\n", b.halfmoveClock, b.fullmoveClock)
+	output += fmt.Sprintf("Halfmoves: %v  Fullmoves: %v\n\n", game.halfmoveClock, game.fullmoveClock)
 	output += fmt.Sprintf(
 		"Castling rights:\nWhite: K:%v Q:%v\nBlack: K:%v Q:%v\n\n",
-		b.castlingRights.whiteKingCastle,
-		b.castlingRights.whiteQueenCastle,
-		b.castlingRights.blackKingCastle,
-		b.castlingRights.blackQueenCastle,
+		game.castlingRights.whiteKingCastle,
+		game.castlingRights.whiteQueenCastle,
+		game.castlingRights.blackKingCastle,
+		game.castlingRights.blackQueenCastle,
 	)
 
-	if b.enPassantTarget != "" {
-		output += fmt.Sprintf("En passant target: %v", b.enPassantTarget)
+	if game.enPassantTarget != "" {
+		output += fmt.Sprintf("En passant target: %v", game.enPassantTarget)
 	}
 
 	return output
 }
 
-func (game *gameState) isSpaceValidAndEmpty(position string) bool {
+func (game *gameState) getPiece(position string) (Piece, error) {
+	index, err := positionToIndex(position)
+	if err != nil {
+		return Piece{}, err
+	}
+
+	return game.boardState[index[0]][index[1]], nil
+}
+
+func (game *gameState) getPieceSafe(position string) Piece {
+	index, err := positionToIndex(position)
+	if err != nil {
+		panic(err)
+	}
+
+	return game.boardState[index[0]][index[1]]
+}
+
+func (game *gameState) setPiece(piece Piece, position string) error {
+	index, err := positionToIndex(position)
+	if err != nil {
+		return err
+	}
+
+	game.boardState[index[0]][index[1]] = piece
+	return nil
+}
+
+func (game *gameState) isSpaceEmpty(position string) bool {
 	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
 	p, err := game.getPiece(position)
 	if err != nil {
@@ -379,7 +429,7 @@ func (game *gameState) isSpaceValidAndEmpty(position string) bool {
 	return false
 }
 
-func (game *gameState) isSpaceValidAndPlayersPiece(position string, player PlayerColour) bool {
+func (game *gameState) isSpacePlayersPiece(position string, player PlayerColour) bool {
 	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
 	p, err := game.getPiece(position)
 	if err != nil {
@@ -448,7 +498,7 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 			log.Warn(err)
 		}
 		// Can only move there if space is empty
-		if game.isSpaceValidAndEmpty(target) {
+		if game.isSpaceEmpty(target) {
 			valid_moves = append(valid_moves, move{from: position, to: target})
 
 			// Also check two steps forward if still on starting row
@@ -476,7 +526,7 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 				}
 
 				// Can only move there if space if empty
-				if game.isSpaceValidAndEmpty(target) {
+				if game.isSpaceEmpty(target) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
 				}
 			}
@@ -489,7 +539,7 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 
 		target, err = positionRelative(position, -1, yOffset)
 		if err == nil {
-			if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+			if game.isSpacePlayersPiece(target, opponentColour) {
 				valid_moves = append(valid_moves, move{from: position, to: target})
 				threats = append(valid_moves, move{from: position, to: target})
 			}
@@ -503,7 +553,7 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 
 		target, err = positionRelative(position, 1, yOffset)
 		if err == nil {
-			if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+			if game.isSpacePlayersPiece(target, opponentColour) {
 				valid_moves = append(valid_moves, move{from: position, to: target})
 				threats = append(valid_moves, move{from: position, to: target})
 			}
@@ -524,9 +574,9 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 		for _, offset := range target_offsets {
 			target, err := positionRelative(position, offset[0], offset[1])
 			if err == nil {
-				if game.isSpaceValidAndEmpty(target) {
+				if game.isSpaceEmpty(target) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+				} else if game.isSpacePlayersPiece(target, opponentColour) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
 					threats = append(valid_moves, move{from: position, to: target})
 				}
@@ -549,9 +599,9 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 				}
 				if game.getPieceSafe(target).Colour == piece.Colour {
 					break
-				} else if game.isSpaceValidAndEmpty(target) {
+				} else if game.isSpaceEmpty(target) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+				} else if game.isSpacePlayersPiece(target, opponentColour) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
 					threats = append(valid_moves, move{from: position, to: target})
 					break
@@ -576,9 +626,9 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 				}
 				if game.getPieceSafe(target).Colour == piece.Colour {
 					break
-				} else if game.isSpaceValidAndEmpty(target) {
+				} else if game.isSpaceEmpty(target) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+				} else if game.isSpacePlayersPiece(target, opponentColour) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
 					threats = append(valid_moves, move{from: position, to: target})
 					break
@@ -607,9 +657,9 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 				}
 				if game.getPieceSafe(target).Colour == piece.Colour {
 					break
-				} else if game.isSpaceValidAndEmpty(target) {
+				} else if game.isSpaceEmpty(target) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+				} else if game.isSpacePlayersPiece(target, opponentColour) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
 					threats = append(valid_moves, move{from: position, to: target})
 					break
@@ -632,9 +682,9 @@ func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, e
 		for _, offset := range target_offsets {
 			target, err := positionRelative(position, offset[0], offset[1])
 			if err == nil {
-				if game.isSpaceValidAndEmpty(target) {
+				if game.isSpaceEmpty(target) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpaceValidAndPlayersPiece(target, opponentColour) {
+				} else if game.isSpacePlayersPiece(target, opponentColour) {
 					valid_moves = append(valid_moves, move{from: position, to: target})
 					threats = append(valid_moves, move{from: position, to: target})
 				}
@@ -693,54 +743,4 @@ func (game *gameState) playerIsInCheck(player PlayerColour) bool {
 		}
 	}
 	return false
-}
-
-func (game *gameState) ExecuteMove(uciMoveString string) error {
-	move, err := UCIToMove(uciMoveString)
-	if err != nil {
-		return fmt.Errorf("error parsing move: %v", err)
-	}
-
-	piece, err := game.getPiece(move.from)
-	if err != nil {
-		return err
-	}
-
-	if piece.Colour != game.nextPlayer {
-		return fmt.Errorf("piece doesn't belong to player - piece is '%v', turn is '%v'", piece.Colour, game.nextPlayer)
-	}
-
-	newstate := *game
-
-	validMoves, _, err := game.GetValidMovesForPiece(move.from)
-	if err != nil {
-		log.Error(err)
-	}
-
-	if slices.Contains(validMoves, *move) {
-		newstate.setPiece(Pieces["space"], move.from)
-		newstate.setPiece(piece, move.to)
-
-		if newstate.playerIsInCheck(game.nextPlayer) {
-			return fmt.Errorf("cannot put yourself in check - '%v'", uciMoveString)
-		}
-
-		if game.nextPlayer == Black {
-			newstate.fullmoveClock++
-		}
-
-		newstate.nextPlayer = game.nextPlayer.getOpponentColour()
-		newstate.updateCastlingRights()
-		game.boardState = newstate.boardState
-		game.castlingRights = newstate.castlingRights
-		game.enPassantTarget = newstate.enPassantTarget
-		game.fullmoveClock = newstate.fullmoveClock
-		game.halfmoveClock = newstate.halfmoveClock
-		game.nextPlayer = newstate.nextPlayer
-
-	} else {
-		return fmt.Errorf("invalid move '%v' - valid moves for piece are '%v'", uciMoveString, validMoves)
-	}
-
-	return nil
 }
