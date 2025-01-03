@@ -971,6 +971,76 @@ func TestSelfCheckPrevention(t *testing.T) {
 			},
 			want: "8/8/3k4/8/2K5/8/8/8 w - - 1 2",
 		},
+		"discovered/pawn/w/1": {
+			starting_state: "8/8/2Qpk3/8/2KPq3/8/8/8 w - - 0 2",
+			moves: []string{
+				"d4d5",
+			},
+			wantError: true,
+		},
+		"discovered/pawn/b/1": {
+			starting_state: "8/8/2Qpk3/8/2KPq3/8/8/8 b - - 0 2",
+			moves: []string{
+				"d6d5",
+			},
+			wantError: true,
+		},
+		"discovered/knight/w/1": {
+			starting_state: "8/8/2Qnk3/8/2KNq3/8/8/8 w - - 0 2",
+			moves: []string{
+				"d4f3",
+			},
+			wantError: true,
+		},
+		"discovered/knight/b/1": {
+			starting_state: "8/8/2Qpk3/8/2KPq3/8/8/8 b - - 0 2",
+			moves: []string{
+				"d6b5",
+			},
+			wantError: true,
+		},
+		"discovered/bishop/w/1": {
+			starting_state: "8/8/2Qbk3/8/2KBq3/8/8/8 w - - 0 2",
+			moves: []string{
+				"d4e5",
+			},
+			wantError: true,
+		},
+		"discovered/bishop/b/1": {
+			starting_state: "8/8/2Qbk3/8/2KBq3/8/8/8 b - - 0 2",
+			moves: []string{
+				"d6c5",
+			},
+			wantError: true,
+		},
+		"discovered/rook/w/1": {
+			starting_state: "8/8/2Qbk3/8/2KBq3/8/8/8 w - - 0 2",
+			moves: []string{
+				"d4d6",
+			},
+			wantError: true,
+		},
+		"discovered/rook/b/1": {
+			starting_state: "8/8/2Qbk3/8/2KBq3/8/8/8 b - - 0 2",
+			moves: []string{
+				"d6d4",
+			},
+			wantError: true,
+		},
+		"discovered/queen/w/1": {
+			starting_state: "8/8/2Rqk3/8/2KQr3/8/8/8 w - - 0 2",
+			moves: []string{
+				"d4d6",
+			},
+			wantError: true,
+		},
+		"discovered/queen/b/1": {
+			starting_state: "8/8/2Rqk3/8/2KQr3/8/8/8 b - - 0 2",
+			moves: []string{
+				"d6d4",
+			},
+			wantError: true,
+		},
 	}
 
 	for name, test := range tests {
