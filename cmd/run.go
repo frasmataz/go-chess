@@ -22,9 +22,9 @@ func main() {
 
 	gameState := game.NewGame()
 
+	fen = strings.TrimSuffix(fen, "\n")
 	if fen != "" {
-		fen = strings.TrimSuffix(fen, "\n")
-		gameState, err = game.BoardFromFEN(fen)
+		gameState, err = game.NewGameFromFEN(fen)
 		if err != nil {
 			panic(err)
 		}
@@ -32,15 +32,18 @@ func main() {
 
 	for {
 		fmt.Print(gameState.PrintGameState())
-		fmt.Println(gameState.BoardToFEN())
+		fmt.Println(gameState.ToFEN())
+		// fmt.Println(gameState.GetValidMovesForPlayer(gameState.NextPlayer))
 		fmt.Print("Enter a move: ")
 
 		var move string
 		fmt.Scanln(&move)
 
-		err := gameState.ExecuteMove(move)
+		newState, err := game.TryApplyMove(*gameState, move)
 		if err != nil {
 			log.Error(err)
+		} else {
+			gameState = newState
 		}
 	}
 }

@@ -3,13 +3,11 @@ package game
 import (
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/fatih/color"
-	"github.com/gofiber/fiber/v2/log"
 )
 
 type Status int
@@ -27,17 +25,20 @@ type castlingRights struct {
 	whiteQueenCastle bool
 }
 
-type gameState struct {
-	boardState      [8][8]Piece // [7][0] is a1, [0][7] is h8 - [0][0] is top-left from white's perspective
-	nextPlayer      PlayerColour
-	castlingRights  castlingRights
-	enPassantTarget string
-	halfmoveClock   int
-	fullmoveClock   int
+type GameState struct {
+	BoardState      [8][8]*Piece // [7][0] is a1, [0][7] is h8 - [0][0] is top-left from white's perspective
+	NextPlayer      PlayerColour
+	CastlingRights  castlingRights
+	EnPassantTarget string
+	HalfmoveClock   int
+	FullmoveClock   int
+	ValidMoves      map[PlayerColour][]move
 }
 
-func NewGame() *gameState {
-	game, err := BoardFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+var positionRegex = regexp.MustCompile(`^[a-h]{1}[1-8]{1}$`)
+
+func NewGame() *GameState {
+	game, err := NewGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 	if err != nil {
 		panic(err)
 	}
@@ -45,7 +46,7 @@ func NewGame() *gameState {
 	return game
 }
 
-func BoardFromFEN(fen string) (*gameState, error) {
+func NewGameFromFEN(fen string) (*GameState, error) {
 	// Converts a FEN board state string into a board objectgo run
 	// https://www.chess.com/terms/fen-chess
 
@@ -53,7 +54,7 @@ func BoardFromFEN(fen string) (*gameState, error) {
 
 	// First segment describes layout of pieces on the board
 	rows := strings.Split(fenSegments[0], "/")
-	board := gameState{}
+	board := GameState{}
 
 	for rownum, row := range rows {
 		boardColumn := 0
@@ -71,7 +72,7 @@ func BoardFromFEN(fen string) (*gameState, error) {
 				}
 
 				for i := 0; i < n; i++ {
-					board.boardState[rownum][boardColumn+i] = Pieces["space"]
+					board.BoardState[rownum][boardColumn+i] = GetPiece("space")
 				}
 
 				boardColumn += n - 1
@@ -82,7 +83,7 @@ func BoardFromFEN(fen string) (*gameState, error) {
 					return nil, err
 				}
 
-				board.boardState[rownum][boardColumn] = piece
+				board.BoardState[rownum][boardColumn] = piece
 			}
 
 			boardColumn++
@@ -91,16 +92,16 @@ func BoardFromFEN(fen string) (*gameState, error) {
 
 	// Second segment describes whose turn it is
 	if fenSegments[1] == "w" {
-		board.nextPlayer = White
+		board.NextPlayer = White
 	} else if fenSegments[1] == "b" {
-		board.nextPlayer = Black
+		board.NextPlayer = Black
 	} else {
 		return nil, fmt.Errorf("next player section missing from FEN")
 	}
 
 	// Third segment describes castling rights
 	if fenSegments[2] == "-" {
-		board.castlingRights = castlingRights{
+		board.CastlingRights = castlingRights{
 			blackKingCastle:  false,
 			blackQueenCastle: false,
 			whiteKingCastle:  false,
@@ -108,26 +109,26 @@ func BoardFromFEN(fen string) (*gameState, error) {
 		}
 	} else {
 		if strings.Contains(fenSegments[2], "k") {
-			board.castlingRights.blackKingCastle = true
+			board.CastlingRights.blackKingCastle = true
 		}
 
 		if strings.Contains(fenSegments[2], "q") {
-			board.castlingRights.blackQueenCastle = true
+			board.CastlingRights.blackQueenCastle = true
 		}
 
 		if strings.Contains(fenSegments[2], "K") {
-			board.castlingRights.whiteKingCastle = true
+			board.CastlingRights.whiteKingCastle = true
 		}
 
 		if strings.Contains(fenSegments[2], "Q") {
-			board.castlingRights.whiteQueenCastle = true
+			board.CastlingRights.whiteQueenCastle = true
 		}
 	}
 
 	// Fourth segment describes en passant targets
 	if fenSegments[3] != "-" {
 		if validatePosition(fenSegments[3]) {
-			board.enPassantTarget = fenSegments[3]
+			board.EnPassantTarget = fenSegments[3]
 		}
 	}
 
@@ -140,7 +141,7 @@ func BoardFromFEN(fen string) (*gameState, error) {
 		return nil, fmt.Errorf("halfmove clock cannot be negative - got '%v'", halfmoves)
 	}
 
-	board.halfmoveClock = halfmoves
+	board.HalfmoveClock = halfmoves
 
 	// Sixth segment counts halfmoves
 	fullmoves, err := strconv.Atoi(fenSegments[5])
@@ -151,15 +152,14 @@ func BoardFromFEN(fen string) (*gameState, error) {
 		return nil, fmt.Errorf("fullmove clock cannot be negative - got '%v'", fullmoves)
 	}
 
-	board.fullmoveClock = fullmoves
+	board.FullmoveClock = fullmoves
+	board.updateValidMoves()
 
 	return &board, nil
 }
 
 func validatePosition(position string) bool {
-	positionRegex := `^[a-h]{1}[1-8]{1}$`
-	re := regexp.MustCompile(positionRegex)
-	return re.MatchString(position)
+	return positionRegex.MatchString(position)
 }
 
 func positionToIndex(position string) ([2]int, error) {
@@ -209,71 +209,55 @@ func positionRelative(position string, offsetX int, offsetY int) (string, error)
 	return output, nil
 }
 
-func (game *gameState) ExecuteMove(uciMoveString string) error {
-	move, err := UCIToMove(uciMoveString)
+func TryApplyMove(game GameState, uciMoveString string) (*GameState, error) {
+	moveFromPos, moveToPos, err := ParseUCIMoveString(uciMoveString)
 	if err != nil {
-		return fmt.Errorf("error parsing move: %v", err)
+		return nil, fmt.Errorf("error parsing move: %v", err)
 	}
 
-	piece, err := game.getPiece(move.from)
-	if err != nil {
-		return err
+	var move *move
+
+	for _, m := range game.ValidMoves[game.NextPlayer] {
+		if m.fromPos == moveFromPos && m.toPos == moveToPos {
+			move = &m
+			break
+		}
 	}
 
-	if piece.Colour != game.nextPlayer {
-		return fmt.Errorf("piece doesn't belong to player - piece is '%v', turn is '%v'", piece.Colour, game.nextPlayer)
+	if move == nil {
+		return nil, fmt.Errorf("invalid move '%v'\nvalid moves for piece:\n%v", uciMoveString, game.ValidMoves)
 	}
 
-	newstate := *game
-
-	validMoves, threats, err := game.GetValidMovesForPiece(move.from)
-	if err != nil {
-		log.Error(err)
+	if moveCausesCheck(game, *move) {
+		return nil, fmt.Errorf("move '%v' causes check\n\nstate: %v\nvalid moves: %v", uciMoveString, game.PrintGameState(), game.ValidMoves)
 	}
 
-	if slices.Contains(validMoves, *move) {
-		capture := false
-		if slices.Contains(threats, *move) {
-			capture = true
-		}
+	newState := ApplyMove(game, *move)
+	return newState, nil
 
-		newstate.setPiece(Pieces["space"], move.from)
-		newstate.setPiece(piece, move.to)
-
-		if newstate.playerIsInCheck(game.nextPlayer) {
-			return fmt.Errorf("cannot put yourself in check - '%v'", uciMoveString)
-		}
-
-		newstate.halfmoveClock++
-		if capture || piece.Class == Pawn {
-			newstate.halfmoveClock = 0
-		}
-
-		if game.nextPlayer == Black {
-			newstate.fullmoveClock++
-		}
-
-		newstate.nextPlayer = game.nextPlayer.getOpponentColour()
-		newstate.updateCastlingRights()
-
-		if newstate.playerIsInCheckmate(game.nextPlayer.getOpponentColour()) {
-			panic("CHECKMATE BABYYY")
-		}
-
-		game.boardState = newstate.boardState
-		game.castlingRights = newstate.castlingRights
-		game.enPassantTarget = newstate.enPassantTarget
-		game.fullmoveClock = newstate.fullmoveClock
-		game.halfmoveClock = newstate.halfmoveClock
-		game.nextPlayer = newstate.nextPlayer
-	} else {
-		return fmt.Errorf("invalid move '%v' - valid moves for piece are '%v'", uciMoveString, validMoves)
-	}
-
-	return nil
 }
 
-func (game *gameState) BoardToFEN() string {
+func ApplyMove(game GameState, move move) *GameState {
+	game.setPiece(GetPiece("space"), move.fromPos)
+	game.setPiece(move.fromPiece, move.toPos)
+
+	game.HalfmoveClock++
+	if move.isThreat || move.fromPiece.Class == Pawn {
+		game.HalfmoveClock = 0
+	}
+
+	if game.NextPlayer == Black {
+		game.FullmoveClock++
+	}
+
+	game.NextPlayer = game.NextPlayer.getOpponentColour()
+	game.updateCastlingRights()
+	game.updateValidMoves()
+
+	return &game
+}
+
+func (game *GameState) ToFEN() string {
 	// Converts a FEN board state string into a board objectgo run
 	// https://www.chess.com/terms/fen-chess
 
@@ -281,7 +265,7 @@ func (game *gameState) BoardToFEN() string {
 
 	// First segment describes layout of pieces on the board
 
-	for rownum, row := range game.boardState {
+	for rownum, row := range game.BoardState {
 		rowString := ""
 		spaceCount := 0
 		for _, piece := range row {
@@ -309,7 +293,7 @@ func (game *gameState) BoardToFEN() string {
 	}
 
 	// Second segment describes whose turn it is
-	if game.nextPlayer == Black {
+	if game.NextPlayer == Black {
 		output += "b"
 	} else {
 		output += "w"
@@ -318,19 +302,19 @@ func (game *gameState) BoardToFEN() string {
 	output += " "
 
 	// Third segment describes castling rights
-	if !(game.castlingRights.whiteKingCastle || game.castlingRights.whiteQueenCastle || game.castlingRights.blackKingCastle || game.castlingRights.blackQueenCastle) {
+	if !(game.CastlingRights.whiteKingCastle || game.CastlingRights.whiteQueenCastle || game.CastlingRights.blackKingCastle || game.CastlingRights.blackQueenCastle) {
 		output += "-"
 	} else {
-		if game.castlingRights.whiteKingCastle {
+		if game.CastlingRights.whiteKingCastle {
 			output += "K"
 		}
-		if game.castlingRights.whiteQueenCastle {
+		if game.CastlingRights.whiteQueenCastle {
 			output += "Q"
 		}
-		if game.castlingRights.blackKingCastle {
+		if game.CastlingRights.blackKingCastle {
 			output += "k"
 		}
-		if game.castlingRights.blackQueenCastle {
+		if game.CastlingRights.blackQueenCastle {
 			output += "q"
 		}
 	}
@@ -338,31 +322,31 @@ func (game *gameState) BoardToFEN() string {
 	output += " "
 
 	// Fourth segment describes en passant targets
-	if game.enPassantTarget == "" {
+	if game.EnPassantTarget == "" {
 		output += "-"
 	} else {
-		output += game.enPassantTarget
+		output += game.EnPassantTarget
 	}
 
 	output += " "
 
 	// Fifth segment counts halfmoves
-	output += strconv.Itoa(game.halfmoveClock)
+	output += strconv.Itoa(game.HalfmoveClock)
 	output += " "
 
 	// Sixth segment counts halfmoves
-	output += strconv.Itoa(game.fullmoveClock)
+	output += strconv.Itoa(game.FullmoveClock)
 
 	return output
 }
 
-func (game *gameState) PrintGameState() string {
+func (game *GameState) PrintGameState() string {
 	blackSquare := color.BgRGB(0, 0, 0)
 	whiteSquare := color.BgRGB(60, 50, 80)
 
 	output := "\n\n"
 
-	for ri, row := range game.boardState {
+	for ri, row := range game.BoardState {
 		rowString := fmt.Sprintf("%s ", strconv.Itoa(8-ri))
 		for ci, column := range row {
 			squareColour := blackSquare
@@ -378,7 +362,7 @@ func (game *gameState) PrintGameState() string {
 
 	output += "  a b c d e f g h \n\n"
 
-	player := PlayerColour(game.nextPlayer)
+	player := PlayerColour(game.NextPlayer)
 	if player == White {
 		output += "White to play.\n"
 	} else if player == Black {
@@ -387,51 +371,51 @@ func (game *gameState) PrintGameState() string {
 		output += "Game stopped.\n"
 	}
 
-	output += fmt.Sprintf("Halfmoves: %v  Fullmoves: %v\n\n", game.halfmoveClock, game.fullmoveClock)
+	output += fmt.Sprintf("Halfmoves: %v  Fullmoves: %v\n\n", game.HalfmoveClock, game.FullmoveClock)
 	output += fmt.Sprintf(
 		"Castling rights:\nWhite: K:%v Q:%v\nBlack: K:%v Q:%v\n\n",
-		game.castlingRights.whiteKingCastle,
-		game.castlingRights.whiteQueenCastle,
-		game.castlingRights.blackKingCastle,
-		game.castlingRights.blackQueenCastle,
+		game.CastlingRights.whiteKingCastle,
+		game.CastlingRights.whiteQueenCastle,
+		game.CastlingRights.blackKingCastle,
+		game.CastlingRights.blackQueenCastle,
 	)
 
-	if game.enPassantTarget != "" {
-		output += fmt.Sprintf("En passant target: %v", game.enPassantTarget)
+	if game.EnPassantTarget != "" {
+		output += fmt.Sprintf("En passant target: %v", game.EnPassantTarget)
 	}
 
 	return output
 }
 
-func (game *gameState) getPiece(position string) (Piece, error) {
+func (game *GameState) getPiece(position string) (*Piece, error) {
 	index, err := positionToIndex(position)
 	if err != nil {
-		return Piece{}, err
+		return nil, err
 	}
 
-	return game.boardState[index[0]][index[1]], nil
+	return game.BoardState[index[0]][index[1]], nil
 }
 
-func (game *gameState) getPieceSafe(position string) Piece {
+func (game *GameState) getPieceSafe(position string) *Piece {
 	index, err := positionToIndex(position)
 	if err != nil {
 		panic(err)
 	}
 
-	return game.boardState[index[0]][index[1]]
+	return game.BoardState[index[0]][index[1]]
 }
 
-func (game *gameState) setPiece(piece Piece, position string) error {
+func (game *GameState) setPiece(piece *Piece, position string) error {
 	index, err := positionToIndex(position)
 	if err != nil {
 		return err
 	}
 
-	game.boardState[index[0]][index[1]] = piece
+	game.BoardState[index[0]][index[1]] = piece
 	return nil
 }
 
-func (game *gameState) isSpaceEmpty(position string) bool {
+func (game *GameState) isSpaceEmpty(position string) bool {
 	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
 	p, err := game.getPiece(position)
 	if err != nil {
@@ -443,7 +427,7 @@ func (game *gameState) isSpaceEmpty(position string) bool {
 	return false
 }
 
-func (game *gameState) isSpacePlayersPiece(position string, player PlayerColour) bool {
+func (game *GameState) isSpacePlayersPiece(position string, player PlayerColour) bool {
 	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
 	p, err := game.getPiece(position)
 	if err != nil {
@@ -455,311 +439,49 @@ func (game *gameState) isSpacePlayersPiece(position string, player PlayerColour)
 	return false
 }
 
-func (game *gameState) updateCastlingRights() {
-	if game.castlingRights.whiteKingCastle {
+func (game *GameState) updateCastlingRights() {
+	if game.CastlingRights.whiteKingCastle {
 		kingStartSpace := game.getPieceSafe("e1")
 		rookStartSpace := game.getPieceSafe("h1")
 		if !(kingStartSpace.Class == King && kingStartSpace.Colour == White) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == White) {
-			game.castlingRights.whiteKingCastle = false
+			game.CastlingRights.whiteKingCastle = false
 		}
 	}
 
-	if game.castlingRights.whiteQueenCastle {
+	if game.CastlingRights.whiteQueenCastle {
 		kingStartSpace := game.getPieceSafe("e1")
 		rookStartSpace := game.getPieceSafe("a1")
 		if !(kingStartSpace.Class == King && kingStartSpace.Colour == White) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == White) {
-			game.castlingRights.whiteQueenCastle = false
+			game.CastlingRights.whiteQueenCastle = false
 		}
 	}
 
-	if game.castlingRights.blackKingCastle {
+	if game.CastlingRights.blackKingCastle {
 		kingStartSpace := game.getPieceSafe("e8")
 		rookStartSpace := game.getPieceSafe("h8")
 		if !(kingStartSpace.Class == King && kingStartSpace.Colour == Black) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == Black) {
-			game.castlingRights.blackKingCastle = false
+			game.CastlingRights.blackKingCastle = false
 		}
 	}
 
-	if game.castlingRights.blackQueenCastle {
+	if game.CastlingRights.blackQueenCastle {
 		kingStartSpace := game.getPieceSafe("e8")
 		rookStartSpace := game.getPieceSafe("a8")
 		if !(kingStartSpace.Class == King && kingStartSpace.Colour == Black) || !(rookStartSpace.Class == Rook && rookStartSpace.Colour == Black) {
-			game.castlingRights.blackQueenCastle = false
+			game.CastlingRights.blackQueenCastle = false
 		}
 	}
 }
 
-func (game *gameState) GetValidMovesForPiece(position string) ([]move, []move, error) {
-	piece, err := game.getPiece(position)
-	if err != nil {
-		return nil, nil, err
+func (game *GameState) updateValidMoves() {
+	game.ValidMoves = map[PlayerColour][]move{
+		White: GetValidMovesForPlayer(game, White),
+		Black: GetValidMovesForPlayer(game, Black),
 	}
-
-	valid_moves := []move{}
-	threats := []move{}
-
-	opponentColour := piece.Colour.getOpponentColour()
-
-	switch piece.Class {
-	case Pawn:
-		// Check one step forward
-		yOffset := 1
-		if piece.Colour == White {
-			yOffset = -1
-		}
-		target, err := positionRelative(position, 0, yOffset)
-		if err != nil {
-			log.Warn(err)
-		}
-		// Can only move there if space is empty
-		if game.isSpaceEmpty(target) {
-			valid_moves = append(valid_moves, move{from: position, to: target})
-
-			// Also check two steps forward if still on starting row
-			currentIndex, err := positionToIndex(position)
-			if err != nil {
-				return nil, nil, fmt.Errorf("piece in unexpected position - pos: %v, err: %v", position, err)
-			}
-
-			// Get starting row for player
-			startingRow := 1
-			if piece.Colour == White {
-				startingRow = 6
-			}
-
-			if currentIndex[0] == startingRow {
-				// Get space two ahead
-				yOffset := 2
-				if piece.Colour == White {
-					yOffset = -2
-				}
-
-				target, err := positionRelative(position, 0, yOffset)
-				if err != nil {
-					return nil, nil, fmt.Errorf("pawn is on starting row but can't move forward by 2, this shouldn't happen - pos: '%v', target: '%v'", position, target)
-				}
-
-				// Can only move there if space if empty
-				if game.isSpaceEmpty(target) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-				}
-			}
-		}
-		// Check left attack
-		yOffset = 1
-		if piece.Colour == White {
-			yOffset = -1
-		}
-
-		target, err = positionRelative(position, -1, yOffset)
-		if err == nil {
-			if game.isSpacePlayersPiece(target, opponentColour) {
-				valid_moves = append(valid_moves, move{from: position, to: target})
-				threats = append(valid_moves, move{from: position, to: target})
-			}
-		}
-
-		// Check right attack
-		yOffset = 1
-		if piece.Colour == White {
-			yOffset = -1
-		}
-
-		target, err = positionRelative(position, 1, yOffset)
-		if err == nil {
-			if game.isSpacePlayersPiece(target, opponentColour) {
-				valid_moves = append(valid_moves, move{from: position, to: target})
-				threats = append(valid_moves, move{from: position, to: target})
-			}
-		}
-		//TODO: En passant capture
-	case Knight:
-		target_offsets := [][2]int{
-			{1, 2},
-			{2, 1},
-			{-1, 2},
-			{2, -1},
-			{1, -2},
-			{-2, 1},
-			{-1, -2},
-			{-2, -1},
-		}
-
-		for _, offset := range target_offsets {
-			target, err := positionRelative(position, offset[0], offset[1])
-			if err == nil {
-				if game.isSpaceEmpty(target) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-					threats = append(valid_moves, move{from: position, to: target})
-				}
-			}
-		}
-	case Bishop:
-		direction_offsets := [][2]int{
-			{1, 1},
-			{1, -1},
-			{-1, 1},
-			{-1, -1},
-		}
-
-		for _, direction_offset := range direction_offsets {
-			current_pos := position
-			for {
-				target, err := positionRelative(current_pos, direction_offset[0], direction_offset[1])
-				if err != nil {
-					break
-				}
-				if game.getPieceSafe(target).Colour == piece.Colour {
-					break
-				} else if game.isSpaceEmpty(target) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-					threats = append(valid_moves, move{from: position, to: target})
-					break
-				}
-				current_pos = target
-			}
-		}
-	case Rook:
-		direction_offsets := [][2]int{
-			{1, 0},
-			{-1, 0},
-			{0, 1},
-			{0, -1},
-		}
-
-		for _, direction_offset := range direction_offsets {
-			current_pos := position
-			for {
-				target, err := positionRelative(current_pos, direction_offset[0], direction_offset[1])
-				if err != nil {
-					break
-				}
-				if game.getPieceSafe(target).Colour == piece.Colour {
-					break
-				} else if game.isSpaceEmpty(target) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-					threats = append(valid_moves, move{from: position, to: target})
-					break
-				}
-				current_pos = target
-			}
-		}
-	case Queen:
-		direction_offsets := [][2]int{
-			{1, 1},
-			{1, 0},
-			{1, -1},
-			{0, 1},
-			{0, -1},
-			{-1, 1},
-			{-1, 0},
-			{-1, -1},
-		}
-
-		for _, direction_offset := range direction_offsets {
-			current_pos := position
-			for {
-				target, err := positionRelative(current_pos, direction_offset[0], direction_offset[1])
-				if err != nil {
-					break
-				}
-				if game.getPieceSafe(target).Colour == piece.Colour {
-					break
-				} else if game.isSpaceEmpty(target) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-					threats = append(valid_moves, move{from: position, to: target})
-					break
-				}
-				current_pos = target
-			}
-		}
-	case King:
-		target_offsets := [][2]int{
-			{1, 1},
-			{1, 0},
-			{1, -1},
-			{0, 1},
-			{0, -1},
-			{-1, 1},
-			{-1, 0},
-			{-1, -1},
-		}
-
-		for _, offset := range target_offsets {
-			target, err := positionRelative(position, offset[0], offset[1])
-			if err == nil {
-				if game.isSpaceEmpty(target) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-				} else if game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(valid_moves, move{from: position, to: target})
-					threats = append(valid_moves, move{from: position, to: target})
-				}
-			}
-		}
-	}
-
-	return valid_moves, threats, nil
 }
 
-func (game *gameState) GetValidMovesForPlayer(player PlayerColour) ([]move, []move) {
-	playerMoves := []move{}
-	playerThreats := []move{}
+// func removeMovesCausingSelfCheck(game *GameState, moves []*move) bool {
+// 	for move := range moves {
 
-	for ri, row := range game.boardState {
-		for ci := range row {
-			pos, err := indexToPosition([2]int{ri, ci})
-			if err != nil {
-				panic(fmt.Errorf("something went wrong iterating board positions for valid moves - err '%v'", err))
-			}
-			if game.getPieceSafe(pos).Colour == player {
-				pieceMoves, pieceThreats, err := game.GetValidMovesForPiece(pos)
-				if err != nil {
-					panic(fmt.Errorf("something went wrong getting moves for piece at position '%v', - err: '%v'", pos, err))
-				}
-				playerMoves = slices.Concat(playerMoves, pieceMoves)
-				playerThreats = slices.Concat(playerThreats, pieceThreats)
-			}
-		}
-	}
-
-	return playerMoves, playerThreats
-}
-
-func (game *gameState) findPlayerKingPosition(player PlayerColour) (string, error) {
-	for ri, row := range game.boardState {
-		for ci, piece := range row {
-			if piece.Class == King && piece.Colour == player {
-				return indexToPosition([2]int{ri, ci})
-			}
-		}
-	}
-	return "", fmt.Errorf("could not find king for player: player '%v'", player)
-}
-
-func (game *gameState) playerIsInCheck(player PlayerColour) bool {
-	kingPos, err := game.findPlayerKingPosition(player)
-	if err != nil {
-		panic(err)
-	}
-
-	_, threats := game.GetValidMovesForPlayer(player.getOpponentColour())
-	for _, threat := range threats {
-		if threat.to == kingPos {
-			return true
-		}
-	}
-	return false
-}
-
-func (game *gameState) playerIsInCheckmate(player PlayerColour) bool {
-	moves, _ := game.GetValidMovesForPlayer(player.getOpponentColour())
-	return len(moves) == 0
-}
+// 	}
+// }

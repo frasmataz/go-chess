@@ -37,16 +37,17 @@ var Pieces = map[string]Piece{
 	"blackKing":   {Class: King, Colour: Black, Symbol: '♔', FENSymbol: 'k'},
 }
 
-func GetPiece(name string) Piece {
-	return Pieces[name]
+func GetPiece(name string) *Piece {
+	piece := Pieces[name]
+	return &piece
 }
 
-func FENToPiece(fenChar rune) (Piece, error) {
-	for _, p := range Pieces {
-		if p.FENSymbol == fenChar {
-			return p, nil
+func FENToPiece(fenChar rune) (*Piece, error) {
+	for _, piece := range Pieces {
+		if piece.FENSymbol == fenChar {
+			return &piece, nil
 		}
 	}
 
-	return Pieces["space"], fmt.Errorf("could not parse FEN char to piece: got '%c'", fenChar)
+	return GetPiece("space"), fmt.Errorf("could not parse FEN char to piece: got '%c'", fenChar)
 }
