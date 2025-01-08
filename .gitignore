@@ -25,3 +25,6 @@ go.work.sum
 .env
 
 .vscode/
+
+*.pprof
+run

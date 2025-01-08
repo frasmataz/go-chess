@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 
 	"github.com/gofiber/fiber/v2/log"
@@ -16,34 +15,20 @@ type move struct {
 	isThreat  bool
 }
 
-var UCIMoveRegex = regexp.MustCompile(`^[a-h]{1}[1-8]{1}[a-h]{1}[1-8]{1}$`)
-
-func ParseUCIMoveString(uciMoveString string) (string, string, error) {
-	if !UCIMoveRegex.MatchString(uciMoveString) {
-		return "", "", fmt.Errorf("move did not match regex %v - got '%v'", UCIMoveRegex, uciMoveString)
-	}
-
-	fromPos := uciMoveString[0:2]
-	toPos := uciMoveString[2:4]
-
-	return fromPos, toPos, nil
-}
-
 func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
-	piece, err := game.getPiece(position)
+	fromPiece, err := game.getPiece(position)
 	if err != nil {
 		return nil, err
 	}
 
-	valid_moves := []move{}
+	possibleMoves := []move{}
+	opponentColour := fromPiece.Colour.getOpponentColour()
 
-	opponentColour := piece.Colour.getOpponentColour()
-
-	switch piece.Class {
+	switch fromPiece.Class {
 	case Pawn:
 		// Check one step forward
 		yOffset := 1
-		if piece.Colour == White {
+		if fromPiece.Colour == White {
 			yOffset = -1
 		}
 		target, err := positionRelative(position, 0, yOffset)
@@ -52,8 +37,8 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 		}
 		// Can only move there if space is empty
 		if game.isSpaceEmpty(target) {
-			valid_moves = append(
-				valid_moves,
+			possibleMoves = append(
+				possibleMoves,
 				move{
 					fromPos:   position,
 					toPos:     target,
@@ -71,14 +56,14 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 
 			// Get starting row for player
 			startingRow := 1
-			if piece.Colour == White {
+			if fromPiece.Colour == White {
 				startingRow = 6
 			}
 
 			if currentIndex[0] == startingRow {
 				// Get space two ahead
 				yOffset := 2
-				if piece.Colour == White {
+				if fromPiece.Colour == White {
 					yOffset = -2
 				}
 
@@ -89,8 +74,8 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 
 				// Can only move there if space if empty
 				if game.isSpaceEmpty(target) {
-					valid_moves = append(
-						valid_moves,
+					possibleMoves = append(
+						possibleMoves,
 						move{
 							fromPos:   position,
 							toPos:     target,
@@ -104,15 +89,15 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 		}
 		// Check left attack
 		yOffset = 1
-		if piece.Colour == White {
+		if fromPiece.Colour == White {
 			yOffset = -1
 		}
 
 		target, err = positionRelative(position, -1, yOffset)
 		if err == nil {
 			if game.isSpacePlayersPiece(target, opponentColour) {
-				valid_moves = append(
-					valid_moves,
+				possibleMoves = append(
+					possibleMoves,
 					move{
 						fromPos:   position,
 						toPos:     target,
@@ -126,15 +111,15 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 
 		// Check right attack
 		yOffset = 1
-		if piece.Colour == White {
+		if fromPiece.Colour == White {
 			yOffset = -1
 		}
 
 		target, err = positionRelative(position, 1, yOffset)
 		if err == nil {
 			if game.isSpacePlayersPiece(target, opponentColour) {
-				valid_moves = append(
-					valid_moves,
+				possibleMoves = append(
+					possibleMoves,
 					move{
 						fromPos:   position,
 						toPos:     target,
@@ -162,8 +147,8 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 			target, err := positionRelative(position, offset[0], offset[1])
 			if err == nil {
 				if game.isSpaceEmpty(target) || game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(
-						valid_moves,
+					possibleMoves = append(
+						possibleMoves,
 						move{
 							fromPos:   position,
 							toPos:     target,
@@ -191,7 +176,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 					break
 				}
 
-				if game.getPieceSafe(target).Colour == piece.Colour {
+				if game.getPieceSafe(target).Colour == fromPiece.Colour {
 					break
 				}
 
@@ -203,7 +188,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 					isThreat:  game.isSpacePlayersPiece(target, opponentColour),
 				}
 
-				valid_moves = append(valid_moves, newMove)
+				possibleMoves = append(possibleMoves, newMove)
 
 				if newMove.isThreat {
 					break
@@ -228,7 +213,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 					break
 				}
 
-				if game.getPieceSafe(target).Colour == piece.Colour {
+				if game.getPieceSafe(target).Colour == fromPiece.Colour {
 					break
 				}
 
@@ -240,7 +225,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 					isThreat:  game.isSpacePlayersPiece(target, opponentColour),
 				}
 
-				valid_moves = append(valid_moves, newMove)
+				possibleMoves = append(possibleMoves, newMove)
 
 				if newMove.isThreat {
 					break
@@ -269,7 +254,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 					break
 				}
 
-				if game.getPieceSafe(target).Colour == piece.Colour {
+				if game.getPieceSafe(target).Colour == fromPiece.Colour {
 					break
 				}
 
@@ -281,7 +266,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 					isThreat:  game.isSpacePlayersPiece(target, opponentColour),
 				}
 
-				valid_moves = append(valid_moves, newMove)
+				possibleMoves = append(possibleMoves, newMove)
 
 				if newMove.isThreat {
 					break
@@ -306,8 +291,8 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 			target, err := positionRelative(position, offset[0], offset[1])
 			if err == nil {
 				if game.isSpaceEmpty(target) || game.isSpacePlayersPiece(target, opponentColour) {
-					valid_moves = append(
-						valid_moves,
+					possibleMoves = append(
+						possibleMoves,
 						move{
 							fromPos:   position,
 							toPos:     target,
@@ -321,7 +306,7 @@ func GetValidMovesForPiece(game *GameState, position string) ([]move, error) {
 		}
 	}
 
-	return valid_moves, nil
+	return possibleMoves, nil
 }
 
 func GetValidMovesForPlayer(game *GameState, player PlayerColour) []move {
@@ -344,14 +329,4 @@ func GetValidMovesForPlayer(game *GameState, player PlayerColour) []move {
 	}
 
 	return playerMoves
-}
-
-func moveCausesCheck(game GameState, move move) bool {
-	newState := ApplyMove(game, move)
-	for _, nextMove := range newState.ValidMoves[newState.NextPlayer] {
-		if nextMove.toPiece.Class == King && nextMove.toPiece.Colour == newState.NextPlayer.getOpponentColour() {
-			return true
-		}
-	}
-	return false
 }

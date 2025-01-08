@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -27,15 +26,15 @@ type castlingRights struct {
 
 type GameState struct {
 	BoardState      [8][8]*Piece // [7][0] is a1, [0][7] is h8 - [0][0] is top-left from white's perspective
-	NextPlayer      PlayerColour
+	PlayerTurn      PlayerColour
 	CastlingRights  castlingRights
 	EnPassantTarget string
 	HalfmoveClock   int
 	FullmoveClock   int
 	ValidMoves      map[PlayerColour][]move
+	Check           bool
+	Checkmate       bool
 }
-
-var positionRegex = regexp.MustCompile(`^[a-h]{1}[1-8]{1}$`)
 
 func NewGame() *GameState {
 	game, err := NewGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
@@ -92,9 +91,9 @@ func NewGameFromFEN(fen string) (*GameState, error) {
 
 	// Second segment describes whose turn it is
 	if fenSegments[1] == "w" {
-		board.NextPlayer = White
+		board.PlayerTurn = White
 	} else if fenSegments[1] == "b" {
-		board.NextPlayer = Black
+		board.PlayerTurn = Black
 	} else {
 		return nil, fmt.Errorf("next player section missing from FEN")
 	}
@@ -158,66 +157,16 @@ func NewGameFromFEN(fen string) (*GameState, error) {
 	return &board, nil
 }
 
-func validatePosition(position string) bool {
-	return positionRegex.MatchString(position)
-}
-
-func positionToIndex(position string) ([2]int, error) {
-	// Converts standard board position (eg. "e4") to indeces in the [8][8]Piece board state
-
-	if !validatePosition(position) {
-		return [2]int{-1, -1}, fmt.Errorf("position string invalid - got '%v'", position)
-	}
-
-	colIndex := int(position[0]) - 97 // 97 is int value of rune 'a'
-	if colIndex < 0 || colIndex > 7 {
-		return [2]int{-1, -1}, fmt.Errorf("parsed row out-of-bounds, should be in range 0-7 - input '%v', parsed to row %v", position, colIndex)
-	}
-
-	rowRawInt, err := strconv.Atoi(string(rune(position[1]))) // FIXME: this can't be the best way
-	if err != nil {
-		return [2]int{-1, -1}, err
-	}
-
-	rowIndex := 8 - int(rowRawInt) // board row indeces are top-down, position strings are bottom-up
-	if rowIndex < 0 || rowIndex > 7 {
-		return [2]int{-1, -1}, fmt.Errorf("parsed column out-of-bounds, should be in range 0-7 - input '%v', parsed to column %v", position, rowIndex)
-	}
-
-	return [2]int{rowIndex, colIndex}, nil
-}
-
-func indexToPosition(index [2]int) (string, error) {
-	if index[0] < 0 || index[0] > 7 || index[1] < 0 || index[1] > 7 {
-		return "", fmt.Errorf("input indeces must both be between 0 - 7 inclusive - got '%v'", index)
-	}
-
-	return fmt.Sprintf("%c%s", rune(index[1]+97), strconv.Itoa(8-index[0])), nil
-}
-
-func positionRelative(position string, offsetX int, offsetY int) (string, error) {
-	startingIndex, err := positionToIndex(position)
-	if err != nil {
-		return "", err
-	}
-
-	output, err := indexToPosition([2]int{startingIndex[0] + offsetY, startingIndex[1] + offsetX})
-	if err != nil {
-		return "", err
-	}
-
-	return output, nil
-}
-
-func TryApplyMove(game GameState, uciMoveString string) (*GameState, error) {
+func TryApplyMove(game GameState, uciMoveString string) (newState *GameState, err error) {
+	movePlayer := game.PlayerTurn
 	moveFromPos, moveToPos, err := ParseUCIMoveString(uciMoveString)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing move: %v", err)
+		return &game, fmt.Errorf("error parsing move: %v", err)
 	}
 
 	var move *move
 
-	for _, m := range game.ValidMoves[game.NextPlayer] {
+	for _, m := range game.ValidMoves[game.PlayerTurn] {
 		if m.fromPos == moveFromPos && m.toPos == moveToPos {
 			move = &m
 			break
@@ -225,19 +174,31 @@ func TryApplyMove(game GameState, uciMoveString string) (*GameState, error) {
 	}
 
 	if move == nil {
-		return nil, fmt.Errorf("invalid move '%v'\nvalid moves for piece:\n%v", uciMoveString, game.ValidMoves)
+		return &game, fmt.Errorf("invalid move '%v'\nvalid moves for piece:\n%v", uciMoveString, game.ValidMoves)
 	}
 
-	if moveCausesCheck(game, *move) {
-		return nil, fmt.Errorf("move '%v' causes check\n\nstate: %v\nvalid moves: %v", uciMoveString, game.PrintGameState(), game.ValidMoves)
+	newState, checks, checkmates := ApplyMove(game, *move)
+
+	if checks[movePlayer] {
+		return &game, fmt.Errorf("cannot put yourself in check")
 	}
 
-	newState := ApplyMove(game, *move)
+	if checkmates[movePlayer] {
+		return &game, fmt.Errorf("HOW DID YOU CHECKMATE YOURSELF????")
+	}
+
+	if checks[newState.PlayerTurn] {
+		newState.Check = true
+	}
+
+	if checkmates[newState.PlayerTurn] {
+		newState.Checkmate = true
+	}
+
 	return newState, nil
-
 }
 
-func ApplyMove(game GameState, move move) *GameState {
+func ApplyMove(game GameState, move move) (*GameState, map[PlayerColour]bool, map[PlayerColour]bool) {
 	game.setPiece(GetPiece("space"), move.fromPos)
 	game.setPiece(move.fromPiece, move.toPos)
 
@@ -246,15 +207,51 @@ func ApplyMove(game GameState, move move) *GameState {
 		game.HalfmoveClock = 0
 	}
 
-	if game.NextPlayer == Black {
+	if game.PlayerTurn == Black {
 		game.FullmoveClock++
 	}
 
-	game.NextPlayer = game.NextPlayer.getOpponentColour()
+	game.PlayerTurn = game.PlayerTurn.getOpponentColour()
 	game.updateCastlingRights()
 	game.updateValidMoves()
 
-	return &game
+	check := make(map[PlayerColour]bool)
+	checkmate := make(map[PlayerColour]bool)
+
+	//Next player's checkmate and check status
+	if len(game.ValidMoves) < 1 {
+		checkmate[game.PlayerTurn] = true
+	}
+
+	for _, move := range game.ValidMoves[game.PlayerTurn.getOpponentColour()] {
+		if move.toPiece.Class == King && move.toPiece.Colour == game.PlayerTurn {
+			check[game.PlayerTurn] = true
+		}
+	}
+
+	//Next player's checkmate and check status
+	if len(game.ValidMoves[game.PlayerTurn]) < 1 {
+		checkmate[game.PlayerTurn.getOpponentColour()] = true
+	}
+
+	for _, move := range game.ValidMoves[game.PlayerTurn.getOpponentColour()] {
+		if move.toPiece.Class == King && move.toPiece.Colour == game.PlayerTurn {
+			check[game.PlayerTurn] = true
+		}
+	}
+
+	//Opponent player's checkmate and check status
+	if len(game.ValidMoves[game.PlayerTurn.getOpponentColour()]) < 1 {
+		checkmate[game.PlayerTurn] = true
+	}
+
+	for _, move := range game.ValidMoves[game.PlayerTurn] {
+		if move.toPiece.Class == King && move.toPiece.Colour == game.PlayerTurn.getOpponentColour() {
+			check[game.PlayerTurn.getOpponentColour()] = true
+		}
+	}
+
+	return &game, check, checkmate
 }
 
 func (game *GameState) ToFEN() string {
@@ -293,7 +290,7 @@ func (game *GameState) ToFEN() string {
 	}
 
 	// Second segment describes whose turn it is
-	if game.NextPlayer == Black {
+	if game.PlayerTurn == Black {
 		output += "b"
 	} else {
 		output += "w"
@@ -362,16 +359,18 @@ func (game *GameState) PrintGameState() string {
 
 	output += "  a b c d e f g h \n\n"
 
-	player := PlayerColour(game.NextPlayer)
-	if player == White {
+	if game.PlayerTurn == White {
 		output += "White to play.\n"
-	} else if player == Black {
+	} else if game.PlayerTurn == Black {
 		output += "Black to play.\n"
 	} else {
 		output += "Game stopped.\n"
 	}
 
-	output += fmt.Sprintf("Halfmoves: %v  Fullmoves: %v\n\n", game.HalfmoveClock, game.FullmoveClock)
+	output += fmt.Sprintf("\nCheck: %t\n", game.Check)
+	output += fmt.Sprintf("Checkmate: %t\n", game.Checkmate)
+
+	output += fmt.Sprintf("\nHalfmoves: %v  Fullmoves: %v\n\n", game.HalfmoveClock, game.FullmoveClock)
 	output += fmt.Sprintf(
 		"Castling rights:\nWhite: K:%v Q:%v\nBlack: K:%v Q:%v\n\n",
 		game.CastlingRights.whiteKingCastle,
@@ -415,30 +414,6 @@ func (game *GameState) setPiece(piece *Piece, position string) error {
 	return nil
 }
 
-func (game *GameState) isSpaceEmpty(position string) bool {
-	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
-	p, err := game.getPiece(position)
-	if err != nil {
-		return false
-	}
-	if p.Class == Space {
-		return true
-	}
-	return false
-}
-
-func (game *GameState) isSpacePlayersPiece(position string, player PlayerColour) bool {
-	// This is a common operation - extracted to helper function to keep move code cleaner and reduce error checks
-	p, err := game.getPiece(position)
-	if err != nil {
-		return false
-	}
-	if p.Colour == player {
-		return true
-	}
-	return false
-}
-
 func (game *GameState) updateCastlingRights() {
 	if game.CastlingRights.whiteKingCastle {
 		kingStartSpace := game.getPieceSafe("e1")
@@ -479,9 +454,3 @@ func (game *GameState) updateValidMoves() {
 		Black: GetValidMovesForPlayer(game, Black),
 	}
 }
-
-// func removeMovesCausingSelfCheck(game *GameState, moves []*move) bool {
-// 	for move := range moves {
-
-// 	}
-// }

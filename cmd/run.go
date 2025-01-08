@@ -44,6 +44,9 @@ func main() {
 			log.Error(err)
 		} else {
 			gameState = newState
+			if gameState.Checkmate {
+				return
+			}
 		}
 	}
 }
