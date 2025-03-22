@@ -1,3 +1,5 @@
+github.com/corentings/chess v0.0.0-20241113092200-3f44c4e3e959 h1:B5Fq6d2MB3li9PXDkm3hR7iMOCgJS6m+igsjtGe2iHA=
+github.com/corentings/chess v0.0.0-20241113092200-3f44c4e3e959/go.mod h1:JBpJId2nojl6rPpbdVJn7FZOATH0Z28vaU+BEp9ttKA=
 github.com/fatih/color v1.18.0 h1:S8gINlzdQ840/4pfAwic/ZE0djQEH3wM94VfqLTZcOM=
 github.com/fatih/color v1.18.0/go.mod h1:4FelSpRwEGDpQ12mAdzqdOukCy4u8WUtOY6lkT/6HfU=
 github.com/gofiber/fiber/v2 v2.52.5 h1:tWoP1MJQjGEe4GB5TUGOi7P2E0ZMMRx5ZTG4rT+yGMo=

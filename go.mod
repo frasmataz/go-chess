@@ -3,6 +3,7 @@ module github.com/frasmataz/go-chess
 go 1.23.1
 
 require (
+	github.com/corentings/chess v0.0.0-20241113092200-3f44c4e3e959
 	github.com/fatih/color v1.18.0
 	github.com/gofiber/fiber/v2 v2.52.5
 )
