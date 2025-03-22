@@ -1,48 +1,35 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"log"
-	"os"
-	"strings"
 
 	"github.com/corentings/chess"
+	"github.com/frasmataz/go-chess/bots"
 )
 
 var game *chess.Game
+var players map[chess.Color]bots.Bot
 
 func main() {
-	fmt.Print("Enter starting FEN, or leave blank for new game: ")
-
-	in := bufio.NewReader(os.Stdin)
-	fenstring, err := in.ReadString('\n')
-	if err != nil {
-		log.Fatalf("Error reading string: %s", err)
-	}
-
 	game = chess.NewGame()
 
-	fenstring = strings.TrimSuffix(fenstring, "\n")
-	if fenstring != "" {
-		fen, err := chess.FEN(fenstring)
-		if err != nil {
-			log.Fatalf("Invalid FEN: %s", fenstring)
-		}
-
-		game = chess.NewGame(fen)
+	players := map[chess.Color]bots.Bot{
+		chess.White: bots.UserBot{},
+		chess.Black: bots.RandomBot{},
 	}
 
 	for game.Outcome() == chess.NoOutcome {
 		log.Println(game.Position().Board().Draw())
-		log.Print("Enter a move: ")
 
-		var movestring string
-		fmt.Scanln(&movestring)
+		player := players[game.Position().Turn()]
+		nextMove := player.GetMove(game)
+		game.Move(nextMove)
 
-		err := game.MoveStr(movestring)
-		if err != nil {
-			log.Printf("Invalid move: %s", movestring)
-		}
 	}
+
+	log.Println(game.Position().Board().Draw())
+	log.Printf("Game complete.  Outcome: %s, by %s", game.Outcome(), game.Method())
+	log.Printf("Moves: %s", game.Moves())
+	log.Printf("End position: %s", game.Position().String())
+
 }
