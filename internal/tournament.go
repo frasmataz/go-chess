@@ -45,17 +45,18 @@ func NewTournament(ctx *context.Context, config conf.Conf, rounds int, white bot
 
 func (t *Tournament) Run(ctx context.Context) error {
 
-	var results chan Result
+	results := make(chan Result, 1)
 
 	for range t.rounds {
-		go func(t *Tournament) {
+		go func() {
 			game, err := t.simulate(*t.ctx)
+			log.Println("DONE")
 			if err != nil {
 				results <- Result{err: err}
 			}
 
 			results <- Result{game: game}
-		}(t)
+		}()
 	}
 
 	for range t.rounds {

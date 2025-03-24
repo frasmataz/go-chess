@@ -15,7 +15,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.GameTimeout)
 	defer cancel()
 
-	t, err := internal.NewTournament(&ctx, cfg, 1, bots.NewRandomBot(1), bots.NewCheckmateCheckTakeBot(1))
+	t, err := internal.NewTournament(&ctx, cfg, 100, bots.NewRandomBot(1), bots.NewCheckmateCheckTakeBot(1))
 	if err != nil {
 		log.Fatal(err)
 	}

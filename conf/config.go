@@ -20,7 +20,7 @@ type Conf struct {
 
 func DefaultConfig() Conf {
 	return Conf{
-		GameTimeout:   1 * time.Second,
+		GameTimeout:   10 * time.Second,
 		DrawLevel:     RESULT,
 		NumberOfGames: 20,
 	}
