@@ -1,52 +1,24 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"strings"
+	"context"
+	"log"
 
-	"github.com/gofiber/fiber/v2/log"
-
-	game "github.com/frasmataz/go-chess/internal"
+	"github.com/frasmataz/go-chess/bots"
+	"github.com/frasmataz/go-chess/conf"
+	"github.com/frasmataz/go-chess/internal"
 )
 
 func main() {
-	fmt.Print("Enter starting FEN, or leave blank for new game: ")
+	cfg := conf.DefaultConfig()
 
-	in := bufio.NewReader(os.Stdin)
-	fen, err := in.ReadString('\n')
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.GameTimeout)
+	defer cancel()
+
+	t, err := internal.NewTournament(&ctx, cfg, 100, bots.NewRandomBot(1), bots.NewCheckmateCheckTakeBot(1))
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	gameState := game.NewGame()
-
-	fen = strings.TrimSuffix(fen, "\n")
-	if fen != "" {
-		gameState, err = game.NewGameFromFEN(fen)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	for {
-		fmt.Print(gameState.PrintGameState())
-		fmt.Println(gameState.ToFEN())
-		// fmt.Println(gameState.GetValidMovesForPlayer(gameState.NextPlayer))
-		fmt.Print("Enter a move: ")
-
-		var move string
-		fmt.Scanln(&move)
-
-		newState, err := game.TryApplyMove(*gameState, move)
-		if err != nil {
-			log.Error(err)
-		} else {
-			gameState = newState
-			if gameState.Checkmate {
-				return
-			}
-		}
-	}
+	t.Run(ctx)
 }
