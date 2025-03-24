@@ -1,24 +1,25 @@
 package main
 
 import (
-	"context"
 	"log"
+	"reflect"
 
-	"github.com/frasmataz/go-chess/bots"
-	"github.com/frasmataz/go-chess/conf"
 	"github.com/frasmataz/go-chess/internal"
 )
 
 func main() {
-	cfg := conf.DefaultConfig()
+	tournament := internal.RunTournament()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.GameTimeout)
-	defer cancel()
+	log.Printf("Tournament ID: %s", tournament.RunId)
+	log.Printf("Started: %s, Ended %s", tournament.StartTime.String(), tournament.EndTime.String())
 
-	t, err := internal.NewTournament(&ctx, cfg, 100, bots.NewRandomBot(1), bots.NewCheckmateCheckTakeBot(1))
-	if err != nil {
-		log.Fatal(err)
+	for _, mr := range tournament.MatchupResults {
+		log.Printf("Matchup ID: %s", mr.Matchup.ID)
+		log.Printf(
+			"White: %s, Black: %s",
+			reflect.TypeOf(mr.Matchup.White).Name(),
+			reflect.TypeOf(mr.Matchup.Black).Name(),
+		)
+		log.Printf("Score W/B/D/E: %d:%d:%d:%d", mr.WhiteWins, mr.BlackWins, mr.Draws, mr.Errors)
 	}
-
-	t.Run(ctx)
 }

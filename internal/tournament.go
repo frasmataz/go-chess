@@ -2,122 +2,62 @@ package internal
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"sync"
+	"time"
 
-	"github.com/corentings/chess"
 	"github.com/frasmataz/go-chess/bots"
 	"github.com/frasmataz/go-chess/conf"
 	"github.com/google/uuid"
 )
 
 type Tournament struct {
-	id     uuid.UUID
-	ctx    *context.Context
-	config conf.Conf
-	rounds int
-	white  bots.Bot
-	black  bots.Bot
+	RunId          uuid.UUID
+	StartTime      time.Time
+	EndTime        time.Time
+	MatchupResults []*MatchupResult
 }
 
-type Result struct {
-	game *chess.Game
-	err  error
+var enabledBots = [2]bots.Bot{
+	bots.NewRandomBot(),
+	bots.NewCheckmateCheckTakeBot(),
 }
 
-func NewTournament(ctx *context.Context, config conf.Conf, rounds int, white bots.Bot, black bots.Bot) (*Tournament, error) {
+func RunTournament() Tournament {
+	tournament := Tournament{}
+	tournament.StartTime = time.Now()
+	tournament.RunId = uuid.New()
 
-	id, err := uuid.NewUUID()
-	if err != nil {
-		return nil, err
-	}
+	cfg := conf.DefaultConfig()
+	var matchups []*Matchup
 
-	return &Tournament{
-		id:     id,
-		ctx:    ctx,
-		config: config,
-		rounds: rounds,
-		white:  white,
-		black:  black,
-	}, nil
+	for _, whiteBot := range enabledBots {
+		for _, blackBot := range enabledBots {
+			ctx, cancel := context.WithTimeout(context.Background(), cfg.GameTimeout)
+			defer cancel()
 
-}
+			matchups = append(matchups, NewMatchup(
+				&ctx,
+				cfg,
+				100,
+				whiteBot,
+				blackBot,
+			))
 
-func (t *Tournament) Run(ctx context.Context) error {
-
-	results := make(chan Result, 1)
-
-	for range t.rounds {
-		go func() {
-			game, err := t.simulate(*t.ctx)
-			log.Println("DONE")
-			if err != nil {
-				results <- Result{err: err}
-			}
-
-			results <- Result{game: game}
-		}()
-	}
-
-	for range t.rounds {
-		result := <-results
-		if result.err != nil {
-			return result.err
-		}
-
-		printResults(t.config, result.game)
-	}
-
-	return nil
-}
-
-func (t *Tournament) simulate(ctx context.Context) (*chess.Game, error) {
-
-	game := chess.NewGame()
-
-	for game.Outcome() == chess.NoOutcome {
-		select {
-		case <-ctx.Done():
-			game.Draw(chess.DrawOffer)
-			return game, nil
-		default:
-			if t.config.DrawLevel >= conf.ALL {
-				log.Println(game.Position().Board().Draw())
-			}
-
-			switch game.Position().Turn() {
-			case chess.Black:
-				game.Move(t.black.GetMove(game))
-			case chess.White:
-				game.Move(t.white.GetMove(game))
-			}
 		}
 	}
 
-	return game, nil
-
-}
-
-func printResults(cfg conf.Conf, game *chess.Game) {
-
-	if cfg.DrawLevel >= conf.RESULT {
-		log.Println(game.Position().Board().Draw())
+	var wg sync.WaitGroup
+	for _, matchup := range matchups {
+		wg.Add(1)
+		go matchup.Run(&wg)
 	}
 
-	if cfg.DrawLevel >= conf.ALL {
-		for i, move := range game.Moves() {
-			fmt.Print(move)
-			if i%2 == 1 {
-				fmt.Println()
-			} else {
-				fmt.Print(" ")
-			}
-		}
+	wg.Wait()
+
+	for _, matchup := range matchups {
+		tournament.MatchupResults = append(tournament.MatchupResults, &matchup.Result)
 	}
 
-	if cfg.DrawLevel >= conf.RESULT {
-		log.Printf("Game %d complete.  Outcome: %s, by %s", game.Outcome(), game.Method())
-		log.Printf("End position: %s", game.Position().String())
-	}
-
+	tournament.EndTime = time.Now()
+	return tournament
 }

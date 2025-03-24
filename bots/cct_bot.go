@@ -2,25 +2,19 @@ package bots
 
 import (
 	"math/rand"
-	"time"
 
 	"github.com/corentings/chess"
 )
 
 type CheckmateCheckTakeBot struct {
-	seed int
 }
 
-func NewCheckmateCheckTakeBot(seed int) CheckmateCheckTakeBot {
+func NewCheckmateCheckTakeBot() CheckmateCheckTakeBot {
 	b := CheckmateCheckTakeBot{}
-	b.seed = seed
 	return b
 }
 
 func (b CheckmateCheckTakeBot) GetMove(game *chess.Game) *chess.Move {
-
-	source := rand.NewSource(time.Now().UnixNano() + int64(b.seed))
-	generator := rand.New(source)
 
 	validMoves := game.ValidMoves()
 
@@ -47,14 +41,14 @@ func (b CheckmateCheckTakeBot) GetMove(game *chess.Game) *chess.Move {
 
 	// Return a random check
 	if len(checks) > 0 {
-		return checks[generator.Intn(len(checks))]
+		return checks[rand.Intn(len(checks))]
 	}
 
 	// Return a random take
 	if len(takes) > 0 {
-		return takes[generator.Intn(len(takes))]
+		return takes[rand.Intn(len(takes))]
 	}
 
-	return validMoves[generator.Intn(len(validMoves))]
+	return validMoves[rand.Intn(len(validMoves))]
 
 }
