@@ -12,17 +12,9 @@ import (
 	"github.com/google/uuid"
 )
 
-type MatchupState int
-
-const (
-	INIT    MatchupState = 0
-	RUNNING MatchupState = 1
-	DONE    MatchupState = 2
-)
-
 type Matchup struct {
 	ID     uuid.UUID
-	State  MatchupState
+	State  State
 	ctx    *context.Context
 	config conf.Conf
 	Rounds int

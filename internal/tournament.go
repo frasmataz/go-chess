@@ -12,6 +12,7 @@ import (
 
 type Tournament struct {
 	RunId          uuid.UUID
+	State          State
 	StartTime      time.Time
 	EndTime        time.Time
 	MatchupResults []*MatchupResult
@@ -46,6 +47,7 @@ func RunTournament() Tournament {
 		}
 	}
 
+	tournament.State = RUNNING
 	var wg sync.WaitGroup
 	for _, matchup := range matchups {
 		wg.Add(1)
@@ -59,5 +61,6 @@ func RunTournament() Tournament {
 	}
 
 	tournament.EndTime = time.Now()
+	tournament.State = DONE
 	return tournament
 }
