@@ -2,10 +2,13 @@ package internal
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/corentings/chess"
 	"github.com/frasmataz/go-chess/bots"
+	"github.com/frasmataz/go-chess/db"
 	"github.com/google/uuid"
 )
 
@@ -31,7 +34,7 @@ func NewGame(white bots.Bot, black bots.Bot) Game {
 	}
 }
 
-func (g *Game) Run(ctx context.Context) {
+func (g *Game) Run(ctx context.Context, parentMatchup *Matchup) {
 
 	g.State = RUNNING
 	g.StartTime = time.Now()
@@ -40,7 +43,7 @@ func (g *Game) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			g.Game.Draw(chess.DrawOffer)
-			g.Finish()
+			g.Finish(parentMatchup)
 			return
 		default:
 			switch g.Game.Position().Turn() {
@@ -52,12 +55,61 @@ func (g *Game) Run(ctx context.Context) {
 		}
 	}
 
-	g.Finish()
+	g.Finish(parentMatchup)
 
 }
 
-func (g *Game) Finish() {
+func (g *Game) Finish(parentMatchup *Matchup) {
 	g.State = DONE
 	g.EndTime = time.Now()
+
+	err := SaveGame(g)
+	if err != nil {
+		log.Fatalf("Error saving game: %v", err)
+	}
+
+	err = SaveMatchupGame(parentMatchup, g)
+	if err != nil {
+		log.Fatalf("Error saving matchup_game: %v", err)
+	}
+
 	close(g.Done)
+}
+
+func SaveGame(game *Game) error {
+
+	sqlStmt := `
+		INSERT INTO games (
+			id,
+			state,
+			start_time,
+			end_time,
+			moves,
+			outcome,
+			method
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+
+	db, err := db.GetDB()
+	if err != nil {
+		return fmt.Errorf("Error saving game: %v", err)
+	}
+
+	_, err = db.Exec(
+		sqlStmt,
+		game.ID,
+		game.State,
+		game.StartTime,
+		game.EndTime,
+		game.Game.String(),
+		game.Game.Outcome().String(),
+		game.Game.Method().String(),
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }

@@ -2,17 +2,19 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/frasmataz/go-chess/bots"
 	"github.com/frasmataz/go-chess/conf"
+	"github.com/frasmataz/go-chess/db"
 	"github.com/google/uuid"
 )
 
 type Tournament struct {
-	RunId     uuid.UUID
+	ID        uuid.UUID
 	State     State
 	StartTime time.Time
 	EndTime   time.Time
@@ -32,7 +34,7 @@ func RunTournament(ctx context.Context) *Tournament {
 	t := Tournament{}
 
 	t.StartTime = time.Now()
-	t.RunId = uuid.New()
+	t.ID = uuid.New()
 	t.Done = make(chan error)
 
 	for _, whiteBot := range enabledBots {
@@ -55,9 +57,9 @@ func RunTournament(ctx context.Context) *Tournament {
 
 		var mwg sync.WaitGroup
 
-		for _, matchup := range t.Matchups {
+		for _, matchup := range tournament.Matchups {
 			mwg.Add(1)
-			go matchup.Run(ctx, &mwg)
+			go matchup.Run(ctx, &mwg, tournament)
 		}
 
 		mwg.Wait()
@@ -65,10 +67,71 @@ func RunTournament(ctx context.Context) *Tournament {
 		tournament.EndTime = time.Now()
 		tournament.State = DONE
 
-		log.Printf("Tournament finished: %s", tournament.RunId.String())
+		log.Printf("Tournament finished: %s", tournament.ID.String())
+
+		err := SaveTournament(tournament)
+		if err != nil {
+			log.Fatalf("Error saving tournament: %v", err)
+		}
+
 		close(tournament.Done)
 
 	}(&t)
 
 	return &t
+}
+
+func SaveTournament(tournament *Tournament) error {
+
+	sqlStmt := `
+		INSERT INTO tournaments (id, state, start_time, end_time)
+		VALUES (?, ?, ?, ?)
+	`
+
+	db, err := db.GetDB()
+	if err != nil {
+		return fmt.Errorf("Error saving tournament: %v", err)
+	}
+
+	_, err = db.Exec(
+		sqlStmt,
+		tournament.ID,
+		tournament.State,
+		tournament.StartTime,
+		tournament.EndTime,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func SaveTournamentMatchup(tournament *Tournament, matchup *Matchup) error {
+
+	sqlStmt := `
+		INSERT INTO tournament_matchup (
+			tournament_id,
+			matchup_id
+		)
+		VALUES (?, ?)
+	`
+
+	db, err := db.GetDB()
+	if err != nil {
+		return fmt.Errorf("Error saving tournament_matchup: %v", err)
+	}
+
+	_, err = db.Exec(
+		sqlStmt,
+		tournament.ID,
+		matchup.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }

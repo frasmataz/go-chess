@@ -2,11 +2,15 @@ package internal
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"reflect"
 	"sync"
 
 	"github.com/corentings/chess"
 	"github.com/frasmataz/go-chess/bots"
 	"github.com/frasmataz/go-chess/conf"
+	"github.com/frasmataz/go-chess/db"
 	"github.com/google/uuid"
 )
 
@@ -49,7 +53,7 @@ func NewMatchup(ctx context.Context, config conf.Conf, rounds int, white bots.Bo
 
 }
 
-func (m *Matchup) Run(ctx context.Context, wg *sync.WaitGroup) {
+func (m *Matchup) Run(ctx context.Context, wg *sync.WaitGroup, parentTournament *Tournament) {
 
 	defer wg.Done()
 
@@ -69,7 +73,7 @@ func (m *Matchup) Run(ctx context.Context, wg *sync.WaitGroup) {
 			subCtx, cancel := context.WithTimeout(ctx, m.config.GameTimeout)
 			defer cancel()
 
-			g.Run(subCtx)
+			g.Run(subCtx, m)
 
 			m.Results.Completed++
 			switch g.Game.Outcome() {
@@ -88,5 +92,87 @@ func (m *Matchup) Run(ctx context.Context, wg *sync.WaitGroup) {
 	game_wg.Wait()
 
 	m.State = DONE
+
+	err := SaveMatchup(m)
+	if err != nil {
+		log.Fatalf("Error saving matchup: %v", err)
+	}
+
+	err = SaveTournamentMatchup(parentTournament, m)
+	if err != nil {
+		log.Fatalf("Error saving tournament_matchup: %v", err)
+	}
+
+}
+
+func SaveMatchup(matchup *Matchup) error {
+
+	sqlStmt := `
+		INSERT INTO matchups (
+			id,
+			state,
+			white,
+			black,
+			rounds,
+			completed,
+			black_wins,
+			white_wins,
+			draws,
+			errors
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	db, err := db.GetDB()
+	if err != nil {
+		return fmt.Errorf("Error saving matchup: %v", err)
+	}
+
+	_, err = db.Exec(
+		sqlStmt,
+		matchup.ID,
+		matchup.State,
+		reflect.TypeOf(matchup.White).Name(),
+		reflect.TypeOf(matchup.Black).Name(),
+		matchup.Rounds,
+		matchup.Results.Completed,
+		matchup.Results.BlackWins,
+		matchup.Results.WhiteWins,
+		matchup.Results.Draws,
+		matchup.Results.Errors,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func SaveMatchupGame(matchup *Matchup, game *Game) error {
+
+	sqlStmt := `
+		INSERT INTO matchup_game (
+			matchup_id,
+			game_id
+		)
+		VALUES (?, ?)
+	`
+
+	db, err := db.GetDB()
+	if err != nil {
+		return fmt.Errorf("Error saving matchup_game: %v", err)
+	}
+
+	_, err = db.Exec(
+		sqlStmt,
+		matchup.ID,
+		game.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 
 }

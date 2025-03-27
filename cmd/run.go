@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/frasmataz/go-chess/db"
 	"github.com/frasmataz/go-chess/internal"
 )
 
@@ -13,6 +14,11 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	err := db.InitDB()
+	if err != nil {
+		log.Fatalf("Error initialising DB: %v", err)
+	}
 
 	t := internal.RunTournament(ctx)
 
@@ -30,12 +36,13 @@ func main() {
 		}
 	}(ctx)
 
-	err := <-t.Done
+	err = <-t.Done
 	if err != nil {
 		log.Fatalf("error running tournament: %v", err)
 	}
 
 	printEndResults(t)
+	db.CloseDB()
 
 }
 
@@ -65,7 +72,7 @@ func printStatus(t *internal.Tournament) {
 
 func printEndResults(t *internal.Tournament) {
 
-	log.Printf("Tournament ID: %s", t.RunId)
+	log.Printf("Tournament ID: %s", t.ID)
 	log.Printf("Started: %s, Ended %s", t.StartTime.String(), t.EndTime.String())
 
 	for _, mu := range t.Matchups {
