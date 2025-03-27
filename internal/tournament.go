@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -11,11 +12,12 @@ import (
 )
 
 type Tournament struct {
-	RunId          uuid.UUID
-	State          State
-	StartTime      time.Time
-	EndTime        time.Time
-	MatchupResults []*MatchupResult
+	RunId     uuid.UUID
+	State     State
+	StartTime time.Time
+	EndTime   time.Time
+	Matchups  []*Matchup
+	Done      chan error
 }
 
 var enabledBots = [2]bots.Bot{
@@ -23,23 +25,23 @@ var enabledBots = [2]bots.Bot{
 	bots.NewCheckmateCheckTakeBot(),
 }
 
-func RunTournament() Tournament {
-	tournament := Tournament{}
-	tournament.StartTime = time.Now()
-	tournament.RunId = uuid.New()
+func RunTournament(ctx context.Context) *Tournament {
 
 	cfg := conf.DefaultConfig()
-	var matchups []*Matchup
+
+	t := Tournament{}
+
+	t.StartTime = time.Now()
+	t.RunId = uuid.New()
+	t.Done = make(chan error)
 
 	for _, whiteBot := range enabledBots {
 		for _, blackBot := range enabledBots {
-			ctx, cancel := context.WithTimeout(context.Background(), cfg.GameTimeout)
-			defer cancel()
 
-			matchups = append(matchups, NewMatchup(
-				&ctx,
+			t.Matchups = append(t.Matchups, NewMatchup(
+				ctx,
 				cfg,
-				100,
+				cfg.NumberOfGames,
 				whiteBot,
 				blackBot,
 			))
@@ -47,20 +49,26 @@ func RunTournament() Tournament {
 		}
 	}
 
-	tournament.State = RUNNING
-	var wg sync.WaitGroup
-	for _, matchup := range matchups {
-		wg.Add(1)
-		go matchup.Run(&wg)
-	}
+	t.State = RUNNING
 
-	wg.Wait()
+	go func(tournament *Tournament) {
 
-	for _, matchup := range matchups {
-		tournament.MatchupResults = append(tournament.MatchupResults, &matchup.Result)
-	}
+		var mwg sync.WaitGroup
 
-	tournament.EndTime = time.Now()
-	tournament.State = DONE
-	return tournament
+		for _, matchup := range t.Matchups {
+			mwg.Add(1)
+			go matchup.Run(ctx, &mwg)
+		}
+
+		mwg.Wait()
+
+		tournament.EndTime = time.Now()
+		tournament.State = DONE
+
+		log.Printf("Tournament finished: %s", tournament.RunId.String())
+		close(tournament.Done)
+
+	}(&t)
+
+	return &t
 }
