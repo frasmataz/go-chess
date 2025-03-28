@@ -4,10 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sql.DB
+var dbMutex sync.Mutex
 
 func CreateTables() error {
 
@@ -86,7 +89,9 @@ func InitDB() error {
 }
 
 func CloseDB() {
+
 	db.Close()
+
 }
 
 func GetDB() (*sql.DB, error) {
@@ -95,5 +100,13 @@ func GetDB() (*sql.DB, error) {
 		return nil, errors.New("DB not initialised!")
 	}
 	return db, nil
+
+}
+
+func SafeExec(query string, args ...any) (sql.Result, error) {
+
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+	return db.Exec(query, args...)
 
 }

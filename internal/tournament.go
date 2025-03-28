@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -88,12 +87,7 @@ func SaveTournament(tournament *Tournament) error {
 		VALUES (?, ?, ?, ?)
 	`
 
-	db, err := db.GetDB()
-	if err != nil {
-		return fmt.Errorf("Error saving tournament: %v", err)
-	}
-
-	_, err = db.Exec(
+	_, err := db.SafeExec(
 		sqlStmt,
 		tournament.ID,
 		tournament.State,
@@ -118,12 +112,7 @@ func SaveTournamentMatchup(tournament *Tournament, matchup *Matchup) error {
 		VALUES (?, ?)
 	`
 
-	db, err := db.GetDB()
-	if err != nil {
-		return fmt.Errorf("Error saving tournament_matchup: %v", err)
-	}
-
-	_, err = db.Exec(
+	_, err := db.SafeExec(
 		sqlStmt,
 		tournament.ID,
 		matchup.ID,

@@ -16,6 +16,8 @@ func main() {
 	defer cancel()
 
 	err := db.InitDB()
+	defer db.CloseDB()
+
 	if err != nil {
 		log.Fatalf("Error initialising DB: %v", err)
 	}
@@ -42,7 +44,6 @@ func main() {
 	}
 
 	printEndResults(t)
-	db.CloseDB()
 
 }
 

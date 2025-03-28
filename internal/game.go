@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -91,12 +90,7 @@ func SaveGame(game *Game) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	db, err := db.GetDB()
-	if err != nil {
-		return fmt.Errorf("Error saving game: %v", err)
-	}
-
-	_, err = db.Exec(
+	_, err := db.SafeExec(
 		sqlStmt,
 		game.ID,
 		game.State,
