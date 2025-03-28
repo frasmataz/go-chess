@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/frasmataz/go-chess/db"
-	"github.com/frasmataz/go-chess/internal"
+	"github.com/frasmataz/go-chess/model"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("Error initialising DB: %v", err)
 	}
 
-	t := internal.RunTournament(ctx)
+	t := model.RunTournament(ctx)
 
 	go func(ctx context.Context) {
 		ticker := time.NewTicker(time.Second)
@@ -47,7 +47,7 @@ func main() {
 
 }
 
-func printStatus(t *internal.Tournament) {
+func printStatus(t *model.Tournament) {
 	for _, mu := range t.Matchups {
 		log.Printf("--- Matchup %s ----", mu.ID)
 		log.Printf(
@@ -71,7 +71,7 @@ func printStatus(t *internal.Tournament) {
 	log.Println("")
 }
 
-func printEndResults(t *internal.Tournament) {
+func printEndResults(t *model.Tournament) {
 
 	log.Printf("Tournament ID: %s", t.ID)
 	log.Printf("Started: %s, Ended %s", t.StartTime.String(), t.EndTime.String())

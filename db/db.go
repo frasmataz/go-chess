@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -91,15 +90,6 @@ func InitDB() error {
 func CloseDB() {
 
 	db.Close()
-
-}
-
-func GetDB() (*sql.DB, error) {
-
-	if db == nil {
-		return nil, errors.New("DB not initialised!")
-	}
-	return db, nil
 
 }
 

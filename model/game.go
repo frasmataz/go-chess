@@ -1,4 +1,4 @@
-package internal
+package model
 
 import (
 	"context"
@@ -23,6 +23,7 @@ type Game struct {
 }
 
 func NewGame(white bots.Bot, black bots.Bot) Game {
+
 	return Game{
 		Game:  chess.NewGame(),
 		ID:    uuid.New(),
@@ -31,6 +32,7 @@ func NewGame(white bots.Bot, black bots.Bot) Game {
 		Black: black,
 		Done:  make(chan error),
 	}
+
 }
 
 func (g *Game) Run(ctx context.Context, parentMatchup *Matchup) {
@@ -59,6 +61,7 @@ func (g *Game) Run(ctx context.Context, parentMatchup *Matchup) {
 }
 
 func (g *Game) Finish(parentMatchup *Matchup) {
+
 	g.State = DONE
 	g.EndTime = time.Now()
 
@@ -73,6 +76,7 @@ func (g *Game) Finish(parentMatchup *Matchup) {
 	}
 
 	close(g.Done)
+
 }
 
 func SaveGame(game *Game) error {
