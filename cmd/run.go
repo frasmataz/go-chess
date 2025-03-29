@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/frasmataz/go-chess/api"
 	"github.com/frasmataz/go-chess/db"
 	"github.com/frasmataz/go-chess/model"
 )
@@ -15,6 +16,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	api.StartServer(ctx)
+	//runTournament()
+
+}
+
+func runTournament() {
+
+	sim_ctx, sim_cancel := context.WithCancel(context.Background())
+	defer sim_cancel()
+
 	err := db.InitDB()
 	defer db.CloseDB()
 
@@ -22,7 +33,7 @@ func main() {
 		log.Fatalf("Error initialising DB: %v", err)
 	}
 
-	t := model.RunTournament(ctx)
+	t := model.RunTournament(sim_ctx)
 
 	go func(ctx context.Context) {
 		ticker := time.NewTicker(time.Second)
@@ -36,7 +47,7 @@ func main() {
 				return
 			}
 		}
-	}(ctx)
+	}(sim_ctx)
 
 	err = <-t.Done
 	if err != nil {
